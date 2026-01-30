@@ -1,0 +1,27 @@
+{
+  "manifestVersion": 2,
+  "version": "0.27.1-1",
+  "upstreamVersion": "0.27.1",
+  "healthCheckPath": "/health",
+  "httpPort": 8080,
+  "addons": {
+    "localstorage": {
+      "sqlite": {
+        "paths": [
+          "/app/data/db.sqlite"
+        ]
+      }
+    }
+  },
+  "capabilities": [
+    "net_admin"
+  ],
+  "udpPorts": {
+    "DERP_PORT": {
+      "title": "DERP STUN Port",
+      "description": "UDP port for embedded DERP STUN (optional)",
+      "defaultValue": 3478,
+      "containerPort": 3478
+    }
+  }
+}
