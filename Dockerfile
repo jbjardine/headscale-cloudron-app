@@ -1,5 +1,7 @@
 FROM headscale/headscale:0.27.1
 
+USER root
+
 COPY start.sh /app/code/start.sh
 RUN chmod +x /app/code/start.sh
 
