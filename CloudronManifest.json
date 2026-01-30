@@ -20,7 +20,7 @@
     "DERP_PORT": {
       "title": "DERP STUN Port",
       "description": "UDP port for embedded DERP STUN (optional)",
-      "defaultValue": 3478,
+      "defaultValue": 3479,
       "containerPort": 3478
     }
   }
