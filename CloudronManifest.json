@@ -4,6 +4,7 @@
   "upstreamVersion": "0.27.1",
   "healthCheckPath": "/health",
   "httpPort": 8080,
+  "configurePath": "/web",
   "addons": {
     "localstorage": {
       "sqlite": {
@@ -11,6 +12,9 @@
           "/app/data/db.sqlite"
         ]
       }
+    },
+    "proxyAuth": {
+      "path": "/web"
     }
   },
   "capabilities": [

@@ -8,8 +8,12 @@ ACL_PATH="/app/data/acl.hujson"
 NOISE_KEY_PATH="/app/data/noise_private.key"
 DERP_KEY_PATH="/app/data/derp_server_private.key"
 UNIX_SOCKET="/run/headscale/headscale.sock"
+HEADSCALE_LISTEN_ADDR="127.0.0.1:8081"
+HEADSCALE_GRPC_ADDR="127.0.0.1:50443"
+CADDY_DATA_DIR="/run/caddy/data"
+CADDY_CONFIG_DIR="/run/caddy/config"
 
-mkdir -p /app/data /run/headscale
+mkdir -p /app/data /run/headscale "${CADDY_DATA_DIR}" "${CADDY_CONFIG_DIR}"
 
 if [ ! -f "${ACL_PATH}" ]; then
   cat > "${ACL_PATH}" <<'EOF'
@@ -32,9 +36,9 @@ fi
 if [ ! -f "${CONFIG_PATH}" ] && [ "${CONFIG_PATH}" = "/app/data/config.yaml" ]; then
   cat > "${CONFIG_PATH}" <<EOF
 server_url: ${APP_ORIGIN}
-listen_addr: 0.0.0.0:8080
+listen_addr: ${HEADSCALE_LISTEN_ADDR}
 metrics_listen_addr: 127.0.0.1:9090
-grpc_listen_addr: 127.0.0.1:50443
+grpc_listen_addr: ${HEADSCALE_GRPC_ADDR}
 grpc_allow_insecure: false
 
 noise:
@@ -104,6 +108,15 @@ randomize_client_port: false
 EOF
 fi
 
+if [ -f "${CONFIG_PATH}" ]; then
+  if grep -qE '^listen_addr:\s*.*:8080\s*$' "${CONFIG_PATH}"; then
+    sed -i "s#^listen_addr:.*#listen_addr: ${HEADSCALE_LISTEN_ADDR}#g" "${CONFIG_PATH}"
+  fi
+  if grep -qE '^grpc_listen_addr:\s*.*:50443\s*$' "${CONFIG_PATH}"; then
+    sed -i "s#^grpc_listen_addr:.*#grpc_listen_addr: ${HEADSCALE_GRPC_ADDR}#g" "${CONFIG_PATH}"
+  fi
+fi
+
 RUN_USER="root"
 if id -u cloudron >/dev/null 2>&1; then
   RUN_USER="cloudron"
@@ -111,18 +124,9 @@ elif id -u headscale >/dev/null 2>&1; then
   RUN_USER="headscale"
 fi
 
-chown -R "${RUN_USER}" /app/data /run/headscale || true
+chown -R "${RUN_USER}" /app/data /run/headscale /run/caddy || true
 
-if [ "${RUN_USER}" = "root" ]; then
-  exec headscale serve --config "${CONFIG_PATH}"
-fi
+export XDG_DATA_HOME="${CADDY_DATA_DIR}"
+export XDG_CONFIG_HOME="${CADDY_CONFIG_DIR}"
 
-if command -v su-exec >/dev/null 2>&1; then
-  exec su-exec "${RUN_USER}" headscale serve --config "${CONFIG_PATH}"
-fi
-
-if command -v gosu >/dev/null 2>&1; then
-  exec gosu "${RUN_USER}" headscale serve --config "${CONFIG_PATH}"
-fi
-
-exec headscale serve --config "${CONFIG_PATH}"
+exec /usr/bin/supervisord -c /app/code/supervisord.conf

@@ -1,0 +1,9 @@
+:8080 {
+  handle_path /web* {
+    root * /app/code/ui/web
+    try_files {path} /index.html
+    file_server
+  }
+
+  reverse_proxy * 127.0.0.1:8081
+}
