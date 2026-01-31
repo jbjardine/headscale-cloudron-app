@@ -12,8 +12,9 @@ HEADSCALE_LISTEN_ADDR="127.0.0.1:8081"
 HEADSCALE_GRPC_ADDR="127.0.0.1:50443"
 CADDY_DATA_DIR="/run/caddy/data"
 CADDY_CONFIG_DIR="/run/caddy/config"
+UI_RUNTIME_DIR="/run/headscale-ui"
 
-mkdir -p /app/data /run/headscale "${CADDY_DATA_DIR}" "${CADDY_CONFIG_DIR}"
+mkdir -p /app/data /run/headscale "${CADDY_DATA_DIR}" "${CADDY_CONFIG_DIR}" "${UI_RUNTIME_DIR}"
 
 if [ ! -f "${ACL_PATH}" ]; then
   cat > "${ACL_PATH}" <<'EOF'
@@ -124,7 +125,7 @@ elif id -u headscale >/dev/null 2>&1; then
   RUN_USER="headscale"
 fi
 
-chown -R "${RUN_USER}" /app/data /run/headscale /run/caddy || true
+chown -R "${RUN_USER}" /app/data /run/headscale /run/caddy "${UI_RUNTIME_DIR}" || true
 
 export XDG_DATA_HOME="${CADDY_DATA_DIR}"
 export XDG_CONFIG_HOME="${CADDY_CONFIG_DIR}"

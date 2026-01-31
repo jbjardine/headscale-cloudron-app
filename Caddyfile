@@ -1,4 +1,13 @@
 :8080 {
+  redir / /web/ 302
+
+  handle /web/config.js {
+    root * /run/headscale-ui
+    header Cache-Control "no-store"
+    rewrite * /config.js
+    file_server
+  }
+
   handle_path /web* {
     root * /app/code/ui/web
     try_files {path} /index.html
