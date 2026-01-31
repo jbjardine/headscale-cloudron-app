@@ -5,6 +5,7 @@
   "healthCheckPath": "/health",
   "httpPort": 8080,
   "configurePath": "/web",
+  "icon": "file://icon.png",
   "addons": {
     "localstorage": {
       "sqlite": {

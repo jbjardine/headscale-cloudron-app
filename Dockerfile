@@ -17,7 +17,7 @@ RUN curl -fsSL -o /tmp/headscale-ui.zip \
     && unzip /tmp/headscale-ui.zip -d /app/code/ui \
     && rm -f /tmp/headscale-ui.zip \
     && for f in /app/code/ui/web/*.html; do \
-        sed -i 's#</head>#  <script src="/web/config.js"></script>\n</head>#' "$f"; \
+        sed -i 's#</head>#  <title>Headscale</title>\n  <script src="/web/config.js"></script>\n</head>#' "$f"; \
       done
 
 COPY Caddyfile /app/code/Caddyfile
