@@ -1,7 +1,7 @@
 {
   "manifestVersion": 2,
-  "version": "0.27.1-1",
-  "upstreamVersion": "0.27.1",
+  "version": "0.28.0-10",
+  "upstreamVersion": "0.28.0",
   "healthCheckPath": "/health",
   "httpPort": 8080,
   "configurePath": "/web",
