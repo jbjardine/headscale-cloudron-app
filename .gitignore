@@ -1,2 +1,4 @@
 .workflow/
 dist/
+__pycache__/
+*.py[cod]

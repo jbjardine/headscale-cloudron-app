@@ -1,0 +1,284 @@
+name: Autopublish upstream updates
+
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: autopublish-upstream
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: ghcr.io/jbjardine/headscale-cloudron-app
+
+jobs:
+  autopublish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Check upstream versions
+        id: bump
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/autoupdate_upstream.py
+
+      - name: Verify generated update diff
+        if: steps.bump.outputs.changed == 'true'
+        run: |
+          if git diff --quiet -- Dockerfile CloudronManifest.json CloudronVersions.json README.md CHANGELOG.md .github/upstream-state.json; then
+            echo "::error::Update script reported changed=true, but no release diff was produced."
+            exit 1
+          fi
+
+          test -s "${{ steps.bump.outputs.release_notes_path }}"
+          git diff -- Dockerfile CloudronManifest.json CloudronVersions.json README.md CHANGELOG.md .github/upstream-state.json
+
+      - name: Set up Node.js
+        if: steps.bump.outputs.changed == 'true'
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+
+      - name: Install Cloudron CLI
+        if: steps.bump.outputs.changed == 'true'
+        run: npm install -g cloudron
+
+      - name: Verify Cloudron versions catalog
+        if: steps.bump.outputs.changed == 'true'
+        run: cloudron versions verify
+
+      - name: Check manifest/catalog coherence
+        if: steps.bump.outputs.changed == 'true'
+        run: |
+          python3 - <<'PY'
+          import json
+
+          with open("CloudronManifest.json", encoding="utf-8") as handle:
+              manifest = json.load(handle)
+          with open("CloudronVersions.json", encoding="utf-8") as handle:
+              versions = json.load(handle)
+
+          version = manifest["version"]
+          entry = versions["versions"].get(version)
+          if not entry:
+              raise SystemExit(f"CloudronVersions.json is missing version {version}")
+
+          catalog_manifest = entry["manifest"]
+          expected_image = f"ghcr.io/jbjardine/headscale-cloudron-app:v{version}"
+          if catalog_manifest.get("version") != version:
+              raise SystemExit("manifest version mismatch")
+          if catalog_manifest.get("dockerImage") != expected_image:
+              raise SystemExit(f"unexpected dockerImage: {catalog_manifest.get('dockerImage')}")
+
+          for field in ("addons", "capabilities", "udpPorts", "mediaLinks", "iconUrl"):
+              if field not in catalog_manifest:
+                  raise SystemExit(f"catalog manifest missing {field}")
+
+          print("Cloudron catalog coherence OK")
+          PY
+
+      - name: Set up Go
+        if: steps.bump.outputs.changed == 'true'
+        uses: actions/setup-go@v6
+        with:
+          go-version: "stable"
+          cache: false
+
+      - name: Lint GitHub Actions workflows
+        if: steps.bump.outputs.changed == 'true'
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@latest
+
+      - name: Check publication state
+        id: publication
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.bump.outputs.tag }}
+          CHANGED: ${{ steps.bump.outputs.changed }}
+        run: |
+          set -euo pipefail
+
+          artifact="headscale-cloudron-app-${RELEASE_TAG//\//-}.tar.gz"
+
+          tag_exists=false
+          if git ls-remote --exit-code --tags origin "refs/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
+            tag_exists=true
+          fi
+
+          release_exists=false
+          asset_exists=false
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            release_exists=true
+            if gh release view "${RELEASE_TAG}" --json assets --jq '.assets[].name' | grep -Fx "${artifact}" >/dev/null; then
+              asset_exists=true
+            fi
+          fi
+
+          image_exists=false
+          if gh api "/users/${GITHUB_REPOSITORY_OWNER}/packages/container/headscale-cloudron-app/versions" --paginate --jq '.[].metadata.container.tags[]?' | grep -Fx "${RELEASE_TAG}" >/dev/null; then
+            image_exists=true
+          fi
+
+          needs_git=false
+          needs_image=false
+          needs_release=false
+          if [ "${CHANGED}" = "true" ] || [ "${tag_exists}" != "true" ]; then
+            needs_git=true
+          fi
+          if [ "${CHANGED}" = "true" ] || [ "${image_exists}" != "true" ]; then
+            needs_image=true
+          fi
+          if [ "${CHANGED}" = "true" ] || [ "${release_exists}" != "true" ] || [ "${asset_exists}" != "true" ]; then
+            needs_release=true
+          fi
+
+          needs_publish=false
+          if [ "${needs_git}" = "true" ] || [ "${needs_image}" = "true" ] || [ "${needs_release}" = "true" ]; then
+            needs_publish=true
+          fi
+
+          {
+            echo "artifact_name=${artifact}"
+            echo "tag_exists=${tag_exists}"
+            echo "release_exists=${release_exists}"
+            echo "asset_exists=${asset_exists}"
+            echo "image_exists=${image_exists}"
+            echo "needs_git=${needs_git}"
+            echo "needs_image=${needs_image}"
+            echo "needs_release=${needs_release}"
+            echo "needs_publish=${needs_publish}"
+          } >> "${GITHUB_OUTPUT}"
+
+          echo "tag_exists=${tag_exists} release_exists=${release_exists} asset_exists=${asset_exists} image_exists=${image_exists}"
+
+      - name: Stop when fully up to date
+        if: steps.publication.outputs.needs_publish != 'true'
+        run: echo "No upstream updates or missing publication artifacts found."
+
+      - name: Checkout existing tag for repair
+        if: steps.bump.outputs.changed != 'true' && steps.publication.outputs.tag_exists == 'true' && (steps.publication.outputs.needs_image == 'true' || steps.publication.outputs.needs_release == 'true')
+        env:
+          RELEASE_TAG: ${{ steps.bump.outputs.tag }}
+        run: git checkout --detach "${RELEASE_TAG}"
+
+      - name: Set up Docker Buildx
+        if: steps.bump.outputs.changed == 'true' || steps.publication.outputs.needs_image == 'true'
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build Docker image before committing
+        if: steps.bump.outputs.changed == 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          load: true
+          tags: headscale-cloudron-app:autopublish-check
+
+      - name: Log in to GHCR
+        if: steps.publication.outputs.needs_image == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Commit and tag automatic update
+        if: steps.publication.outputs.needs_git == 'true'
+        env:
+          RELEASE_TAG: ${{ steps.bump.outputs.tag }}
+          CHANGED: ${{ steps.bump.outputs.changed }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [ "${CHANGED}" = "true" ]; then
+            git add Dockerfile CloudronManifest.json CloudronVersions.json README.md CHANGELOG.md .github/upstream-state.json
+            if git diff --cached --quiet; then
+              echo "::error::No staged release changes to commit."
+              exit 1
+            fi
+            git commit -m "Publie automatiquement ${RELEASE_TAG}"
+          fi
+
+          if git rev-parse -q --verify "refs/tags/${RELEASE_TAG}" >/dev/null; then
+            tag_commit="$(git rev-list -n 1 "${RELEASE_TAG}")"
+            head_commit="$(git rev-parse HEAD)"
+            if [ "${tag_commit}" != "${head_commit}" ]; then
+              echo "::error::Local tag ${RELEASE_TAG} does not point at HEAD."
+              exit 1
+            fi
+          else
+            git tag -a "${RELEASE_TAG}" -m "Release ${RELEASE_TAG}"
+          fi
+
+          git push --atomic origin HEAD:main "refs/tags/${RELEASE_TAG}"
+
+      - name: Build and push GHCR image
+        if: steps.publication.outputs.needs_image == 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ steps.bump.outputs.tag }}
+            ${{ env.IMAGE_NAME }}:latest
+
+      - name: Create source tarball
+        if: steps.publication.outputs.needs_release == 'true'
+        id: package
+        env:
+          RELEASE_TAG: ${{ steps.bump.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          safe_tag="${RELEASE_TAG//\//-}"
+          artifact="headscale-cloudron-app-${safe_tag}.tar.gz"
+
+          tar \
+            --exclude='.git' \
+            --exclude='./.git' \
+            --exclude='.github' \
+            --exclude='./.github' \
+            --exclude='.workflow' \
+            --exclude='./.workflow' \
+            --exclude='dist' \
+            --exclude='./dist' \
+            -czf "$RUNNER_TEMP/$artifact" .
+
+          echo "artifact=$RUNNER_TEMP/$artifact" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub release
+        if: steps.publication.outputs.needs_release == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.bump.outputs.tag }}
+          RELEASE_NOTES_PATH: ${{ steps.bump.outputs.release_notes_path }}
+          RELEASE_ARTIFACT: ${{ steps.package.outputs.artifact }}
+        run: |
+          set -euo pipefail
+
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release upload "${RELEASE_TAG}" "${RELEASE_ARTIFACT}" --clobber
+            gh release edit "${RELEASE_TAG}" \
+              --title "${RELEASE_TAG}" \
+              --notes-file "${RELEASE_NOTES_PATH}" \
+              --latest
+          else
+            gh release create "${RELEASE_TAG}" \
+              "${RELEASE_ARTIFACT}" \
+              --title "${RELEASE_TAG}" \
+              --notes-file "${RELEASE_NOTES_PATH}" \
+              --latest
+          fi

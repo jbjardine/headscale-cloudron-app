@@ -1,0 +1,9 @@
+{
+  "headscale_version": "0.29.2",
+  "headscale_sha256": "858ef94bca9ecdfc742c24119c831e437e1b75691fdd5041be4059db1a38aac0",
+  "headscale_ui_version": "2026.03.17",
+  "headscale_ui_sha256": "e959dde83569233a8643917e5c58f596b433709556b86f9e998c729d01a6cb29",
+  "alpine_tag": "3.24",
+  "alpine_digest": "sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b",
+  "updated_at": "2026-07-01T21:15:00+00:00"
+}
