@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.28.0-22 - 2026-07-01
+
+- Make Device View user groups compact and aligned with the native User View list styling.
+
 ## 0.28.0-21 - 2026-07-01
 
 - Normalize Headscale node user names so Device View user grouping works when the API exposes `username`, `display_name`, or `email` instead of `name`.

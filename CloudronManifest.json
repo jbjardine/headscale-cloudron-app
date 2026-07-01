@@ -5,7 +5,7 @@
   "description": "Headscale is an open source, self-hosted implementation of the Tailscale control server. This Cloudron package runs Headscale with SQLite storage, an optional embedded DERP STUN UDP port, and a bundled web UI protected by Cloudron proxy auth.",
   "tagline": "Self-hosted Tailscale-compatible coordination server",
   "manifestVersion": 2,
-  "version": "0.28.0-21",
+  "version": "0.28.0-22",
   "upstreamVersion": "0.28.0",
   "website": "https://headscale.net/",
   "contactEmail": "jbjardine@users.noreply.github.com",
