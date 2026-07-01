@@ -58,8 +58,13 @@ jobs:
           print("Cloudron catalog coherence OK")
           PY
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+
       - name: Lint GitHub Actions workflows
-        uses: rhysd/actionlint@v1
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@latest
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
