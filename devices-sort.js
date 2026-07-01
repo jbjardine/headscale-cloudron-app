@@ -23,13 +23,13 @@
     style.id = "headscale-device-user-groups-style";
     style.textContent = [
       ".headscale-device-user-group{background:transparent!important;border:0!important;box-shadow:none!important;margin:.35rem 1rem .55rem!important;padding:0!important;}",
-      ".headscale-device-user-heading{align-items:center;background:oklch(0.93 0 0);border-radius:.375rem;min-height:2.65rem;padding:.45rem .6rem .45rem .65rem;}",
+      ".headscale-device-user-heading{align-items:center;background:oklch(0.93 0 0);border-radius:.375rem;cursor:pointer;min-height:2.65rem;padding:.45rem .6rem .45rem .65rem;}",
+      ".headscale-device-user-heading:hover{background:oklch(0.91 0 0);}",
+      ".headscale-device-user-heading:focus-visible{outline:2px solid rgba(15,118,110,.65);outline-offset:2px;}",
       ".headscale-device-user-title{align-items:center;display:flex;gap:.5rem;min-width:0;}",
       ".headscale-device-user-name{font-size:.95rem;line-height:1.25rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}",
-      ".headscale-device-user-count{background:rgba(15,118,110,.08);border:1px solid rgba(15,118,110,.16);border-radius:.35rem;color:#0f766e;font-size:.7rem;font-weight:600;line-height:1rem;padding:.05rem .4rem;}",
-      ".headscale-device-user-toggle{align-items:center;background:transparent;border:0;border-radius:.35rem;color:inherit;cursor:pointer;display:flex;height:2.15rem;justify-content:center;margin:-.25rem -.25rem -.25rem .35rem;width:2.15rem;}",
-      ".headscale-device-user-toggle:hover{background:rgba(15,23,42,.06);}",
-      ".headscale-device-user-toggle:focus-visible{outline:2px solid rgba(15,118,110,.65);outline-offset:2px;}",
+      ".headscale-device-user-count{background:rgba(15,118,110,.08);border:1px solid rgba(15,118,110,.16);border-radius:.35rem;color:#0f766e;flex-shrink:0;font-size:.7rem;font-weight:600;line-height:1rem;padding:.05rem .4rem;}",
+      ".headscale-device-user-toggle{align-items:center;color:inherit;display:flex;flex-shrink:0;height:2.15rem;justify-content:center;margin:-.25rem -.25rem -.25rem .35rem;pointer-events:none;width:2.15rem;}",
       ".headscale-device-user-body{border-left:0;margin:.35rem 0 0;padding:0;}",
       ".headscale-device-user-body>.card-primary.bg-base-200{background:oklch(0.93 0 0)!important;border:0!important;border-radius:.375rem;box-shadow:none!important;margin:.35rem 0 0!important;padding:.45rem .65rem!important;}",
       ".headscale-device-user-body>.card-primary.bg-base-200:hover{background:oklch(0.91 0 0)!important;}",
@@ -149,6 +149,15 @@
     });
   }
 
+  function isDeviceCardElement(element) {
+    return !!element && element.nodeType === 1 &&
+      element.classList &&
+      element.classList.contains("card-primary") &&
+      element.classList.contains("bg-base-200") &&
+      !element.hasAttribute(GROUP_ATTR) &&
+      getDeviceId(element) !== null;
+  }
+
   function getTextValue(value) {
     if (value === undefined || value === null) return "";
     return String(value).replace(/\s+/g, " ").trim();
@@ -204,12 +213,45 @@
     return svg;
   }
 
+  function setChevron(button, collapsed) {
+    var path = button.querySelector("path");
+    if (path) path.setAttribute("d", collapsed ? "M19 9l-7 7-7-7" : "M5 15l7-7 7 7");
+  }
+
+  function setGroupCollapsed(userName, group, collapsed) {
+    var header = group.querySelector("[" + HEADER_ATTR + "]");
+    var button = group.querySelector(".headscale-device-user-toggle");
+    var body = group.querySelector(".headscale-device-user-body");
+
+    if (collapsed) {
+      collapsedUsers.add(userName);
+    } else {
+      collapsedUsers.delete(userName);
+    }
+
+    if (header) {
+      header.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      header.setAttribute("aria-label", collapsed ? "Expand " + userName + " devices" : "Collapse " + userName + " devices");
+    }
+    if (button) {
+      setChevron(button, collapsed);
+    }
+    if (body) {
+      body.hidden = collapsed;
+      body.style.display = collapsed ? "none" : "";
+    }
+  }
+
+  function toggleGroup(userName, group) {
+    setGroupCollapsed(userName, group, !collapsedUsers.has(userName));
+  }
+
   function createGroup(userName, userCards) {
     var group = document.createElement("div");
     var header = document.createElement("div");
     var left = document.createElement("div");
     var right = document.createElement("div");
-    var button = document.createElement("button");
+    var button = document.createElement("span");
     var label = document.createElement("span");
     var count = document.createElement("span");
     var body = document.createElement("div");
@@ -217,26 +259,28 @@
 
     group.className = "card-primary bg-base-200 headscale-device-user-group";
     group.setAttribute(GROUP_ATTR, "true");
+    group.setAttribute("data-headscale-device-user-name", userName);
     header.className = "flex justify-between headscale-device-user-heading";
+    header.setAttribute(HEADER_ATTR, "true");
+    header.setAttribute("role", "button");
+    header.setAttribute("tabindex", "0");
+    header.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    header.setAttribute("aria-label", collapsed ? "Expand " + userName + " devices" : "Collapse " + userName + " devices");
     left.className = "headscale-device-user-title";
     label.className = "font-bold headscale-device-user-name";
     label.textContent = userName;
     count.className = "headscale-device-user-count";
     count.textContent = userCards.length + " " + (userCards.length === 1 ? "device" : "devices");
     button.className = "headscale-device-user-toggle";
-    button.type = "button";
-    button.setAttribute(HEADER_ATTR, "true");
-    button.setAttribute("aria-expanded", collapsed ? "false" : "true");
-    button.setAttribute("aria-label", collapsed ? "Expand " + userName + " devices" : "Collapse " + userName + " devices");
-    button.title = collapsed ? "Expand " + userName + " devices" : "Collapse " + userName + " devices";
+    button.setAttribute("aria-hidden", "true");
     button.appendChild(createChevron(collapsed));
-    button.addEventListener("click", function () {
-      if (collapsedUsers.has(userName)) {
-        collapsedUsers.delete(userName);
-      } else {
-        collapsedUsers.add(userName);
-      }
-      scheduleApply();
+    header.addEventListener("click", function () {
+      toggleGroup(userName, group);
+    });
+    header.addEventListener("keydown", function (event) {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      toggleGroup(userName, group);
     });
     body.className = "headscale-device-user-body";
     body.hidden = collapsed;
@@ -258,6 +302,75 @@
     group.appendChild(header);
     group.appendChild(body);
     return group;
+  }
+
+  function cardIds(cards) {
+    return cards.map(function (card) {
+      return String(getDeviceId(card));
+    });
+  }
+
+  function buildDesiredGroups(cards) {
+    var groups = new Map();
+    cards.sort(compareCards).forEach(function (card) {
+      var node = nodesById.get(String(getDeviceId(card)));
+      var userName = getUserName(node);
+      if (!groups.has(userName)) groups.set(userName, []);
+      groups.get(userName).push(card);
+    });
+
+    return Array.from(groups.keys()).sort(function (left, right) {
+      return left.localeCompare(right, undefined, { sensitivity: "base" });
+    }).map(function (userName) {
+      return {
+        userName: userName,
+        cards: groups.get(userName),
+        ids: cardIds(groups.get(userName))
+      };
+    });
+  }
+
+  function getDirectGroups(container) {
+    return Array.from(container.children).filter(function (child) {
+      return child.hasAttribute && child.hasAttribute(GROUP_ATTR);
+    });
+  }
+
+  function groupCards(group) {
+    var body = group.querySelector(".headscale-device-user-body");
+    if (!body) return [];
+    return Array.from(body.children).filter(function (card) {
+      return card.classList && card.classList.contains("card-primary") && getDeviceId(card) !== null;
+    });
+  }
+
+  function groupMatches(group, desired) {
+    var userName = group.getAttribute("data-headscale-device-user-name") || "";
+    var ids = cardIds(groupCards(group));
+    if (userName !== desired.userName || ids.length !== desired.ids.length) return false;
+    for (var i = 0; i < ids.length; i += 1) {
+      if (ids[i] !== desired.ids[i]) return false;
+    }
+    return true;
+  }
+
+  function syncExistingGroups(container, desiredGroups) {
+    var groups = getDirectGroups(container);
+    if (groups.length !== desiredGroups.length) return false;
+
+    for (var i = 0; i < desiredGroups.length; i += 1) {
+      if (!groupMatches(groups[i], desiredGroups[i])) return false;
+    }
+
+    desiredGroups.forEach(function (desired, index) {
+      var group = groups[index];
+      var count = group.querySelector(".headscale-device-user-count");
+      if (count) {
+        count.textContent = desired.cards.length + " " + (desired.cards.length === 1 ? "device" : "devices");
+      }
+      setGroupCollapsed(desired.userName, group, collapsedUsers.has(desired.userName));
+    });
+    return true;
   }
 
   function getListContainer(cards) {
@@ -332,21 +445,17 @@
     var container = getListContainer(cards);
     if (!container) return;
 
-    var groups = new Map();
-    cards.sort(compareCards).forEach(function (card) {
-      var node = nodesById.get(String(getDeviceId(card)));
-      var userName = getUserName(node);
-      if (!groups.has(userName)) groups.set(userName, []);
-      groups.get(userName).push(card);
-    });
+    var desiredGroups = buildDesiredGroups(cards);
+
+    if (syncExistingGroups(container, desiredGroups)) {
+      updateControl();
+      return;
+    }
 
     applying = true;
     removeGroups(container);
-    Array.from(groups.keys()).sort(function (left, right) {
-      return left.localeCompare(right, undefined, { sensitivity: "base" });
-    }).forEach(function (userName) {
-      var userCards = groups.get(userName);
-      container.appendChild(createGroup(userName, userCards));
+    desiredGroups.forEach(function (desired) {
+      container.appendChild(createGroup(desired.userName, desired.cards));
     });
     updateControl();
     setTimeout(function () {
@@ -363,11 +472,31 @@
     }, 100);
   }
 
+  function mutationInsideGroup(mutation) {
+    return mutation.target && mutation.target.closest && mutation.target.closest("[" + GROUP_ATTR + "]");
+  }
+
+  function mutationTouchesDeviceCard(mutation) {
+    var nodes = Array.from(mutation.addedNodes || []).concat(Array.from(mutation.removedNodes || []));
+    return nodes.some(function (node) {
+      if (!node || node.nodeType !== 1) return false;
+      if (isDeviceCardElement(node)) return true;
+      return Array.from(node.querySelectorAll ? node.querySelectorAll(".card-primary.bg-base-200") : []).some(isDeviceCardElement);
+    });
+  }
+
+  function shouldScheduleForMutations(mutations) {
+    return mutations.some(function (mutation) {
+      if (!mutationInsideGroup(mutation)) return true;
+      return mutation.type === "childList" && mutationTouchesDeviceCard(mutation);
+    });
+  }
+
   function observePage() {
     if (!document.body) return;
 
-    new MutationObserver(function () {
-      if (!applying) scheduleApply();
+    new MutationObserver(function (mutations) {
+      if (!applying && shouldScheduleForMutations(mutations)) scheduleApply();
     }).observe(document.body, { childList: true, subtree: true });
     scheduleApply();
   }

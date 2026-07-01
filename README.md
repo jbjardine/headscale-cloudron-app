@@ -19,13 +19,13 @@ The repository and GHCR package must be public for third-party Cloudron installs
 Advanced users can install the published image directly from this package directory:
 
 ```sh
-cloudron install --location headscale --image ghcr.io/jbjardine/headscale-cloudron-app:v0.28.0-22
+cloudron install --location headscale --image ghcr.io/jbjardine/headscale-cloudron-app:v0.28.0-23
 ```
 
 ## Release Process
 
 1. Update `CloudronManifest.json`, `CloudronVersions.json`, and `CHANGELOG.md` for the new package version.
-2. Create and push a matching Git tag, for example `v0.28.0-22`.
+2. Create and push a matching Git tag, for example `v0.28.0-23`.
 3. Run the `Draft Cloudron release` workflow with that tag. It creates a draft GitHub release with a `tar.gz` package that excludes `.git` and `.github`.
 4. Publish the draft release. The `Publish GHCR image` workflow builds the tagged Docker image and pushes both the tag and `latest` to GHCR.
 5. If needed, run `Publish GHCR image` manually with the same tag.
@@ -37,5 +37,5 @@ The Docker image exposes HTTP on `8080` and optional DERP STUN UDP on container 
 Manual image build:
 
 ```sh
-docker build -t ghcr.io/jbjardine/headscale-cloudron-app:v0.28.0-22 .
+docker build -t ghcr.io/jbjardine/headscale-cloudron-app:v0.28.0-23 .
 ```

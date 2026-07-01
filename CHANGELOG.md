@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.28.0-23 - 2026-07-01
+
+- Make Device View user group headers fully clickable and avoid rebuilding grouped device cards when opening device details.
+
 ## 0.28.0-22 - 2026-07-01
 
 - Make Device View user groups compact and aligned with the native User View list styling.
