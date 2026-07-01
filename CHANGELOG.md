@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.28.0-21 - 2026-07-01
+
+- Normalize Headscale node user names so Device View user grouping works when the API exposes `username`, `display_name`, or `email` instead of `name`.
+
 ## 0.28.0-20 - 2026-07-01
 
 - Polish Device View grouped user cards with lighter nested rows and clearer collapse controls.

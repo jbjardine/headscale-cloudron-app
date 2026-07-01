@@ -66,6 +66,13 @@ def normalize_node(node):
         return normalize_value(node)
 
     normalized = {key: normalize_value(value) for key, value in node.items()}
+    user = normalized.get("user")
+    if isinstance(user, dict) and not _normalize_node_user_value(user.get("name")):
+        for key in USER_NAME_FIELDS:
+            key_value = user.get(key)
+            if _normalize_node_user_value(key_value):
+                user["name"] = str(key_value).strip()
+                break
     for key in NODE_ARRAY_FIELDS:
         if normalized.get(key) is None:
             normalized[key] = []

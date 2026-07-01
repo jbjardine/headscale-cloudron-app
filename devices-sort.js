@@ -147,10 +147,31 @@
     });
   }
 
+  function getTextValue(value) {
+    if (value === undefined || value === null) return "";
+    return String(value).replace(/\s+/g, " ").trim();
+  }
+
+  function getFirstUserName(source, fields) {
+    for (var i = 0; i < fields.length; i += 1) {
+      var value = getTextValue(source[fields[i]]);
+      if (value) return value;
+    }
+    return "";
+  }
+
   function getUserName(node) {
+    var userFields = ["name", "username", "displayName", "display_name", "email"];
+    var nodeFields = ["username", "userName", "user_name", "displayName", "display_name", "email"];
+
     if (node && node.user) {
-      if (node.user.name) return String(node.user.name);
+      var userName = getFirstUserName(node.user, userFields);
+      if (userName) return userName;
       if (node.user.id !== undefined && node.user.id !== null) return "user-" + node.user.id;
+    }
+    if (node) {
+      var nodeUserName = getFirstUserName(node, nodeFields);
+      if (nodeUserName) return nodeUserName;
     }
     return "No user";
   }
