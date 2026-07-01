@@ -1,0 +1,54 @@
+name: Draft Cloudron release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Git tag to package, for example v0.28.0-20
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  draft-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Create source tarball
+        id: package
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          safe_tag="${RELEASE_TAG//\//-}"
+          artifact="headscale-cloudron-app-${safe_tag}.tar.gz"
+
+          tar \
+            --exclude='.git' \
+            --exclude='./.git' \
+            --exclude='.github' \
+            --exclude='./.github' \
+            --exclude='.workflow' \
+            --exclude='./.workflow' \
+            --exclude='dist' \
+            --exclude='./dist' \
+            -czf "$RUNNER_TEMP/$artifact" .
+
+          mkdir -p dist
+          cp "$RUNNER_TEMP/$artifact" "dist/$artifact"
+          echo "artifact=dist/$artifact" >> "$GITHUB_OUTPUT"
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          draft: true
+          generate_release_notes: true
+          files: ${{ steps.package.outputs.artifact }}

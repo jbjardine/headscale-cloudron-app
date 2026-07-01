@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - feat/headscale-ui
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Cloudron CLI
+        run: npm install -g cloudron
+
+      - name: Verify Cloudron versions catalog
+        run: cloudron versions verify
+
+      - name: Check manifest/catalog coherence
+        run: |
+          python3 - <<'PY'
+          import json
+
+          with open("CloudronManifest.json", encoding="utf-8") as handle:
+              manifest = json.load(handle)
+          with open("CloudronVersions.json", encoding="utf-8") as handle:
+              versions = json.load(handle)
+
+          version = manifest["version"]
+          entry = versions["versions"].get(version)
+          if not entry:
+              raise SystemExit(f"CloudronVersions.json is missing version {version}")
+
+          catalog_manifest = entry["manifest"]
+          expected_image = f"ghcr.io/jbjardine/headscale-cloudron-app:v{version}"
+          if catalog_manifest.get("version") != version:
+              raise SystemExit("manifest version mismatch")
+          if catalog_manifest.get("dockerImage") != expected_image:
+              raise SystemExit(f"unexpected dockerImage: {catalog_manifest.get('dockerImage')}")
+
+          for field in ("addons", "capabilities", "udpPorts", "mediaLinks", "iconUrl"):
+              if field not in catalog_manifest:
+                  raise SystemExit(f"catalog manifest missing {field}")
+
+          print("Cloudron catalog coherence OK")
+          PY
+
+      - name: Lint GitHub Actions workflows
+        uses: rhysd/actionlint@v1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: headscale-cloudron-app:ci
