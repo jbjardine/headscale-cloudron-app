@@ -1,18 +1,29 @@
 # Headscale Cloudron App
 
-Cloudron package for [Headscale](https://headscale.net/) with SQLite storage, an optional embedded DERP STUN UDP port, and a bundled web UI at `/web`.
+Cloudron package for [Headscale](https://headscale.net/), the self-hosted, Tailscale-compatible coordination server for WireGuard-based private networks.
+
+This package ships Headscale with SQLite persistence, Cloudron proxy authentication for the bundled web UI, an optional embedded DERP STUN UDP port, public GHCR images, and automatic upstream update publishing.
+
+## Features
+
+- Headscale packaged for Cloudron with persistent SQLite storage under `/app/data`.
+- Bundled Headscale UI available at `/web`, protected by Cloudron proxy auth.
+- Optional embedded DERP STUN UDP port exposed on container port `3478`.
+- Read-only browser-side UI API proxy that keeps the Headscale API token server-side.
+- Published GHCR images for Cloudron installs and advanced direct installs.
+- Weekly automatic update checks for Headscale, Headscale UI, and Alpine base image changes.
 
 ## Install
 
-Recommended Cloudron community app URL:
+Add this community app store URL in Cloudron:
 
 ```text
 https://raw.githubusercontent.com/jbjardine/headscale-cloudron-app/main/CloudronVersions.json
 ```
 
-In Cloudron, open **App Store** -> **Settings**, add the custom app store URL above, then install Headscale from the app store.
+In Cloudron, open **App Store** -> **Settings**, add the URL above, then install **Headscale** from the custom app store.
 
-The repository and GHCR package must be public for third-party Cloudron installs. Private repositories or private GHCR packages require registry credentials on the target Cloudron.
+The repository and GHCR package are public so third-party Cloudron installs can pull the catalog and image without registry credentials.
 
 ## GHCR Fallback
 
@@ -22,20 +33,18 @@ Advanced users can install the published image directly from this package direct
 cloudron install --location headscale --image ghcr.io/jbjardine/headscale-cloudron-app:v0.29.2-1
 ```
 
-## Release Process
+## Updates
 
-1. Update `CloudronManifest.json`, `CloudronVersions.json`, and `CHANGELOG.md` for the new package version.
-2. Create and push a matching Git tag, for example `v0.29.2-1`.
-3. Run the `Draft Cloudron release` workflow with that tag. It creates a draft GitHub release with a `tar.gz` package that excludes `.git` and `.github`.
-4. Publish the draft release. The `Publish GHCR image` workflow builds the tagged Docker image and pushes both the tag and `latest` to GHCR.
-5. If needed, run `Publish GHCR image` manually with the same tag.
+The `Autopublish upstream updates` GitHub Actions workflow checks upstream releases once a week. When Headscale, Headscale UI, or the Alpine base image changes, it updates the Cloudron package metadata, validates the catalog, builds the Docker image on GitHub Actions, pushes GHCR tags, and publishes the GitHub release automatically.
+
+The current package tracks:
+
+- Headscale `0.29.2`
+- Headscale UI `2026.03.17`
+- Alpine `3.24`
 
 ## Build Notes
 
-The Docker image exposes HTTP on `8080` and optional DERP STUN UDP on container port `3478`. Persistent state is stored under `/app/data`, with SQLite at `/app/data/db.sqlite`.
+The Docker image exposes HTTP on `8080` and optional DERP STUN UDP on `3478/udp`. Persistent state is stored under `/app/data`, with SQLite at `/app/data/db.sqlite`.
 
-Manual image build:
-
-```sh
-docker build -t ghcr.io/jbjardine/headscale-cloudron-app:v0.29.2-1 .
-```
+Local Docker builds are not required for normal releases; GitHub Actions validates and builds the image on Linux runners.
