@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.28.0-19 - 2026-07-01
+
+- Match Device View user grouping to the existing User View expandable card pattern.
+
 ## 0.28.0-18 - 2026-07-01
 
 - Hide collapsed Device View user sections with inline display state so bundled UI card styles cannot keep devices visible.

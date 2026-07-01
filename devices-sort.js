@@ -1,6 +1,7 @@
 (function () {
   var API_URL = "/web/api/v1/node";
   var DEVICE_PATH_RE = /\/web\/devices\.html\/?$/;
+  var GROUP_ATTR = "data-headscale-device-user-group";
   var HEADER_ATTR = "data-headscale-device-user-header";
   var CONTROL_ATTR = "data-headscale-user-sort-control";
   var NODE_ID_RE = /^\s*(\d+)\s*:/;
@@ -21,12 +22,8 @@
     var style = document.createElement("style");
     style.id = "headscale-device-user-groups-style";
     style.textContent = [
-      ".headscale-device-user-header{align-items:center;background:rgba(15,118,110,.08);border:1px solid rgba(15,118,110,.2);border-radius:.25rem;color:#0f766e;cursor:pointer;display:flex;font:inherit;font-size:.9rem;font-weight:700;gap:.45rem;margin:.45rem 0 .05rem;padding:.3rem .5rem;text-align:left;width:100%;}",
-      ".headscale-device-user-header:hover{background:rgba(15,118,110,.13);}",
-      ".headscale-device-user-header:focus-visible{outline:2px solid rgba(15,118,110,.75);outline-offset:2px;}",
-      ".headscale-device-user-header-chevron{display:inline-block;font-weight:900;text-align:center;width:1rem;}",
-      ".headscale-device-user-header-name{flex:0 1 auto;}",
-      ".headscale-device-user-header-count{border:1px solid rgba(15,118,110,.25);border-radius:.25rem;color:#0f766e;font-size:.72rem;font-weight:600;padding:.05rem .35rem;}",
+      ".headscale-device-user-count{font-size:.75rem;font-weight:400;margin-left:.5rem;opacity:.7;}",
+      ".headscale-device-user-body>.card-primary.bg-base-200{margin-top:.5rem;}",
       ".headscale-user-sort-button{min-width:3rem;}"
     ].join("");
     document.head.appendChild(style);
@@ -60,7 +57,7 @@
         if (groupEnabled) {
           scheduleApply();
         } else {
-          removeHeaders();
+          removeGroups();
           showAllCards();
           sortCardsById();
           updateControl();
@@ -75,7 +72,7 @@
       button.addEventListener("click", function () {
         groupEnabled = false;
         setTimeout(function () {
-          removeHeaders();
+          removeGroups();
           showAllCards();
           updateControl();
         }, 0);
@@ -137,7 +134,7 @@
 
   function getDeviceCards() {
     return Array.from(document.querySelectorAll(".card-primary.bg-base-200")).filter(function (card) {
-      return getDeviceId(card) !== null;
+      return !card.hasAttribute(GROUP_ATTR) && getDeviceId(card) !== null;
     });
   }
 
@@ -159,25 +156,46 @@
     return Number(leftId) - Number(rightId);
   }
 
-  function createHeader(userName, count) {
-    var header = document.createElement("button");
-    var chevron = document.createElement("span");
+  function createChevron(collapsed) {
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+
+    svg.setAttribute("class", "h-6 w-6 inline flex-shrink-0");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "2");
+    path.setAttribute("stroke-linecap", "round");
+    path.setAttribute("stroke-linejoin", "round");
+    path.setAttribute("d", collapsed ? "M19 9l-7 7-7-7" : "M5 15l7-7 7 7");
+    svg.appendChild(path);
+    return svg;
+  }
+
+  function createGroup(userName, userCards) {
+    var group = document.createElement("div");
+    var header = document.createElement("div");
+    var left = document.createElement("div");
+    var right = document.createElement("div");
+    var button = document.createElement("button");
     var label = document.createElement("span");
-    var badge = document.createElement("span");
+    var count = document.createElement("span");
+    var body = document.createElement("div");
     var collapsed = collapsedUsers.has(userName);
 
-    header.className = "headscale-device-user-header";
-    header.type = "button";
-    header.setAttribute(HEADER_ATTR, "true");
-    header.setAttribute("aria-expanded", collapsed ? "false" : "true");
-    header.title = collapsed ? "Expand " + userName + " devices" : "Collapse " + userName + " devices";
-    chevron.className = "headscale-device-user-header-chevron";
-    chevron.textContent = collapsed ? ">" : "v";
-    label.className = "headscale-device-user-header-name";
+    group.className = "card-primary bg-base-200";
+    group.setAttribute(GROUP_ATTR, "true");
+    header.className = "flex justify-between";
+    label.className = "font-bold";
     label.textContent = userName;
-    badge.className = "headscale-device-user-header-count";
-    badge.textContent = count + " " + (count === 1 ? "device" : "devices");
-    header.addEventListener("click", function () {
+    count.className = "headscale-device-user-count";
+    count.textContent = userCards.length + " " + (userCards.length === 1 ? "device" : "devices");
+    button.type = "button";
+    button.setAttribute(HEADER_ATTR, "true");
+    button.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    button.title = collapsed ? "Expand " + userName + " devices" : "Collapse " + userName + " devices";
+    button.appendChild(createChevron(collapsed));
+    button.addEventListener("click", function () {
       if (collapsedUsers.has(userName)) {
         collapsedUsers.delete(userName);
       } else {
@@ -185,17 +203,50 @@
       }
       scheduleApply();
     });
+    body.className = "mt-2 pt-2 pl-2 headscale-device-user-body";
+    body.hidden = collapsed;
+    body.style.display = collapsed ? "none" : "";
 
-    header.appendChild(chevron);
-    header.appendChild(label);
-    header.appendChild(badge);
-    return header;
+    left.appendChild(label);
+    left.appendChild(count);
+    right.appendChild(button);
+    header.appendChild(left);
+    header.appendChild(right);
+    userCards.forEach(function (card) {
+      card.hidden = false;
+      card.style.display = "";
+      card.setAttribute("data-headscale-device-user", userName);
+      body.appendChild(card);
+    });
+
+    group.appendChild(header);
+    group.appendChild(body);
+    return group;
   }
 
-  function removeHeaders(container) {
+  function getListContainer(cards) {
+    if (!cards.length) return null;
+
+    var group = cards[0].closest("[" + GROUP_ATTR + "]");
+    if (group && group.parentElement) return group.parentElement;
+    return cards[0].parentElement;
+  }
+
+  function removeGroups(container) {
     var root = container || document;
+    Array.from(root.querySelectorAll("[" + GROUP_ATTR + "]")).forEach(function (group) {
+      var parent = group.parentElement;
+      if (parent) {
+        Array.from(group.querySelectorAll(".card-primary.bg-base-200")).filter(function (card) {
+          return !card.hasAttribute(GROUP_ATTR) && getDeviceId(card) !== null;
+        }).forEach(function (card) {
+          parent.insertBefore(card, group);
+        });
+      }
+      group.remove();
+    });
     Array.from(root.querySelectorAll("[" + HEADER_ATTR + "]")).forEach(function (header) {
-      header.remove();
+      if (!header.closest("[" + GROUP_ATTR + "]")) header.remove();
     });
   }
 
@@ -211,7 +262,7 @@
     var cards = getDeviceCards();
     if (cards.length < 2) return;
 
-    var container = cards[0].parentElement;
+    var container = getListContainer(cards);
     if (!container) return;
 
     applying = true;
@@ -240,7 +291,7 @@
     var cards = getDeviceCards();
     if (cards.length < 1) return;
 
-    var container = cards[0].parentElement;
+    var container = getListContainer(cards);
     if (!container) return;
 
     var groups = new Map();
@@ -252,19 +303,12 @@
     });
 
     applying = true;
-    removeHeaders(container);
+    removeGroups(container);
     Array.from(groups.keys()).sort(function (left, right) {
       return left.localeCompare(right, undefined, { sensitivity: "base" });
     }).forEach(function (userName) {
       var userCards = groups.get(userName);
-      container.appendChild(createHeader(userName, userCards.length));
-      userCards.forEach(function (card) {
-        var collapsed = collapsedUsers.has(userName);
-        card.hidden = collapsed;
-        card.style.display = collapsed ? "none" : "";
-        card.setAttribute("data-headscale-device-user", userName);
-        container.appendChild(card);
-      });
+      container.appendChild(createGroup(userName, userCards));
     });
     updateControl();
     setTimeout(function () {
