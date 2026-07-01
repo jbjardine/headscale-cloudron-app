@@ -27,6 +27,7 @@ NODE_ARRAY_FIELDS = {
     "tags",
     "validTags",
 }
+USER_NAME_FIELDS = ("name", "username", "display_name", "email")
 HOP_BY_HOP_HEADERS = {
     "connection",
     "content-encoding",
@@ -71,10 +72,49 @@ def normalize_node(node):
     return normalized
 
 
+def _normalize_node_user_value(value):
+    if isinstance(value, str):
+        return value.strip().lower()
+    return ""
+
+
+def get_node_user_sort_key(node):
+    if not isinstance(node, dict):
+        return ""
+
+    user = node.get("user")
+    if isinstance(user, dict):
+        for key in USER_NAME_FIELDS:
+            key_value = _normalize_node_user_value(user.get(key))
+            if key_value:
+                return key_value
+
+    for key in USER_NAME_FIELDS:
+        key_value = _normalize_node_user_value(node.get(key))
+        if key_value:
+            return key_value
+
+    return _normalize_node_user_value(node.get("name"))
+
+
+def sort_nodes_by_user(nodes):
+    return sorted(
+        nodes,
+        key=lambda node: (
+            get_node_user_sort_key(node),
+            _normalize_node_user_value(node.get("name")) if isinstance(node, dict) else "",
+        ),
+    )
+
+
 def normalize_json_response(path, data):
     data = normalize_value(data)
-    if path.startswith("/api/v1/node") and isinstance(data, dict) and isinstance(data.get("nodes"), list):
+    if (
+        path.rstrip("/") == "/api/v1/node" and
+        isinstance(data, dict) and isinstance(data.get("nodes"), list)
+    ):
         data["nodes"] = [normalize_node(node) for node in data["nodes"]]
+        data["nodes"] = sort_nodes_by_user(data["nodes"])
     return data
 
 

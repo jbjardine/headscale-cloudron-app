@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.28.0-15 - 2026-07-01
+
+- Sort the proxied `/api/v1/node` list by Headscale user for the bundled UI.
+- Add a browser-side Devices User toggle that groups visible device cards under user headers without handling API tokens.
+
 ## 0.28.0-12 - 2026-07-01
 
 - Materialize missing Headscale node tag and route arrays as empty arrays for the bundled UI.

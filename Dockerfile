@@ -24,13 +24,16 @@ RUN curl -fsSL -o /tmp/headscale-ui.zip \
         sed -i 's#</head>#  <title>Headscale</title>\n  <script src="/web/config.js"></script>\n</head>#' "$f"; \
       done
 
+COPY devices-sort.js /app/code/ui/web/devices-sort.js
+RUN sed -i 's#</head>#  <script src="/web/devices-sort.js" defer></script>\n</head>#' /app/code/ui/web/devices.html
+
 COPY Caddyfile /app/code/Caddyfile
 COPY supervisord.conf /app/code/supervisord.conf
 COPY ui-api-proxy.py /app/code/ui-api-proxy.py
 COPY ui-init.sh /app/code/ui-init.sh
 COPY caddy-start.sh /app/code/caddy-start.sh
 COPY start.sh /app/code/start.sh
-RUN sed -i 's/\r$//' /app/code/start.sh /app/code/ui-init.sh /app/code/ui-api-proxy.py /app/code/caddy-start.sh \
+RUN sed -i 's/\r$//' /app/code/start.sh /app/code/ui-init.sh /app/code/ui-api-proxy.py /app/code/ui/web/devices-sort.js /app/code/caddy-start.sh \
     && chmod +x /app/code/start.sh /app/code/ui-init.sh /app/code/ui-api-proxy.py /app/code/caddy-start.sh
 
 EXPOSE 8080
