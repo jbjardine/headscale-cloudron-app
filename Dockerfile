@@ -26,11 +26,12 @@ RUN curl -fsSL -o /tmp/headscale-ui.zip \
 
 COPY Caddyfile /app/code/Caddyfile
 COPY supervisord.conf /app/code/supervisord.conf
+COPY ui-api-proxy.py /app/code/ui-api-proxy.py
 COPY ui-init.sh /app/code/ui-init.sh
 COPY caddy-start.sh /app/code/caddy-start.sh
 COPY start.sh /app/code/start.sh
-RUN sed -i 's/\r$//' /app/code/start.sh /app/code/ui-init.sh /app/code/caddy-start.sh \
-    && chmod +x /app/code/start.sh /app/code/ui-init.sh /app/code/caddy-start.sh
+RUN sed -i 's/\r$//' /app/code/start.sh /app/code/ui-init.sh /app/code/ui-api-proxy.py /app/code/caddy-start.sh \
+    && chmod +x /app/code/start.sh /app/code/ui-init.sh /app/code/ui-api-proxy.py /app/code/caddy-start.sh
 
 EXPOSE 8080
 EXPOSE 3478/udp
