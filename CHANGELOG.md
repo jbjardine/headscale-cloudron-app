@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.28.0-18 - 2026-07-01
+
+- Hide collapsed Device View user sections with inline display state so bundled UI card styles cannot keep devices visible.
+
+## 0.28.0-17 - 2026-07-01
+
+- Polish Device View user group headers so collapsed sections read as proper compact rows.
+
+## 0.28.0-16 - 2026-07-01
+
+- Make Device View user groups collapsible so each user's devices can be compacted under the user header.
+
 ## 0.28.0-15 - 2026-07-01
 
 - Sort the proxied `/api/v1/node` list by Headscale user for the bundled UI.

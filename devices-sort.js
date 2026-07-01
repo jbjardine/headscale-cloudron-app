@@ -5,6 +5,7 @@
   var CONTROL_ATTR = "data-headscale-user-sort-control";
   var NODE_ID_RE = /^\s*(\d+)\s*:/;
   var nodesById = new Map();
+  var collapsedUsers = new Set();
   var groupEnabled = true;
   var refreshPromise = null;
   var scheduled = false;
@@ -20,7 +21,11 @@
     var style = document.createElement("style");
     style.id = "headscale-device-user-groups-style";
     style.textContent = [
-      ".headscale-device-user-header{display:flex;align-items:center;gap:.5rem;margin:.35rem 0 -.15rem;color:#0f766e;font-size:.9rem;font-weight:700;}",
+      ".headscale-device-user-header{align-items:center;background:rgba(15,118,110,.08);border:1px solid rgba(15,118,110,.2);border-radius:.25rem;color:#0f766e;cursor:pointer;display:flex;font:inherit;font-size:.9rem;font-weight:700;gap:.45rem;margin:.45rem 0 .05rem;padding:.3rem .5rem;text-align:left;width:100%;}",
+      ".headscale-device-user-header:hover{background:rgba(15,118,110,.13);}",
+      ".headscale-device-user-header:focus-visible{outline:2px solid rgba(15,118,110,.75);outline-offset:2px;}",
+      ".headscale-device-user-header-chevron{display:inline-block;font-weight:900;text-align:center;width:1rem;}",
+      ".headscale-device-user-header-name{flex:0 1 auto;}",
       ".headscale-device-user-header-count{border:1px solid rgba(15,118,110,.25);border-radius:.25rem;color:#0f766e;font-size:.72rem;font-weight:600;padding:.05rem .35rem;}",
       ".headscale-user-sort-button{min-width:3rem;}"
     ].join("");
@@ -56,6 +61,7 @@
           scheduleApply();
         } else {
           removeHeaders();
+          showAllCards();
           sortCardsById();
           updateControl();
         }
@@ -70,6 +76,7 @@
         groupEnabled = false;
         setTimeout(function () {
           removeHeaders();
+          showAllCards();
           updateControl();
         }, 0);
       });
@@ -153,16 +160,33 @@
   }
 
   function createHeader(userName, count) {
-    var header = document.createElement("div");
+    var header = document.createElement("button");
+    var chevron = document.createElement("span");
     var label = document.createElement("span");
     var badge = document.createElement("span");
+    var collapsed = collapsedUsers.has(userName);
 
     header.className = "headscale-device-user-header";
+    header.type = "button";
     header.setAttribute(HEADER_ATTR, "true");
+    header.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    header.title = collapsed ? "Expand " + userName + " devices" : "Collapse " + userName + " devices";
+    chevron.className = "headscale-device-user-header-chevron";
+    chevron.textContent = collapsed ? ">" : "v";
+    label.className = "headscale-device-user-header-name";
     label.textContent = userName;
     badge.className = "headscale-device-user-header-count";
     badge.textContent = count + " " + (count === 1 ? "device" : "devices");
+    header.addEventListener("click", function () {
+      if (collapsedUsers.has(userName)) {
+        collapsedUsers.delete(userName);
+      } else {
+        collapsedUsers.add(userName);
+      }
+      scheduleApply();
+    });
 
+    header.appendChild(chevron);
     header.appendChild(label);
     header.appendChild(badge);
     return header;
@@ -172,6 +196,14 @@
     var root = container || document;
     Array.from(root.querySelectorAll("[" + HEADER_ATTR + "]")).forEach(function (header) {
       header.remove();
+    });
+  }
+
+  function showAllCards() {
+    getDeviceCards().forEach(function (card) {
+      card.hidden = false;
+      card.style.display = "";
+      card.removeAttribute("data-headscale-device-user");
     });
   }
 
@@ -227,6 +259,10 @@
       var userCards = groups.get(userName);
       container.appendChild(createHeader(userName, userCards.length));
       userCards.forEach(function (card) {
+        var collapsed = collapsedUsers.has(userName);
+        card.hidden = collapsed;
+        card.style.display = collapsed ? "none" : "";
+        card.setAttribute("data-headscale-device-user", userName);
         container.appendChild(card);
       });
     });
