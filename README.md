@@ -1,5 +1,9 @@
 # Headscale Cloudron App
 
+If this project is useful to you, you can support its development here:
+
+[![Support](https://img.shields.io/badge/Support-Buy%20Me%20a%20Coffee-1f2937)](https://www.buymeacoffee.com/jbjardine)
+
 Cloudron package for [Headscale](https://headscale.net/), the self-hosted, Tailscale-compatible coordination server for WireGuard-based private networks.
 
 This package ships Headscale with SQLite persistence, Cloudron proxy authentication for the bundled web UI, an optional embedded DERP STUN UDP port, public GHCR images, and automatic upstream update publishing.
