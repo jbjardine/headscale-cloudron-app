@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches:
+      - main
       - feat/headscale-ui
   pull_request:
   workflow_dispatch:
