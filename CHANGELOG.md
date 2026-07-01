@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.28.0-20 - 2026-07-01
+
+- Polish Device View grouped user cards with lighter nested rows and clearer collapse controls.
+
 ## 0.28.0-19 - 2026-07-01
 
 - Match Device View user grouping to the existing User View expandable card pattern.

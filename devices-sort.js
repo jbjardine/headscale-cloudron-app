@@ -22,8 +22,17 @@
     var style = document.createElement("style");
     style.id = "headscale-device-user-groups-style";
     style.textContent = [
-      ".headscale-device-user-count{font-size:.75rem;font-weight:400;margin-left:.5rem;opacity:.7;}",
-      ".headscale-device-user-body>.card-primary.bg-base-200{margin-top:.5rem;}",
+      ".headscale-device-user-group{box-shadow:0 1px 3px rgba(15,23,42,.08);margin:.45rem 0 .7rem;padding:.65rem .75rem .75rem;}",
+      ".headscale-device-user-heading{align-items:center;min-height:2rem;}",
+      ".headscale-device-user-title{align-items:center;display:flex;gap:.5rem;min-width:0;}",
+      ".headscale-device-user-name{font-size:.95rem;line-height:1.25rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}",
+      ".headscale-device-user-count{background:rgba(15,118,110,.08);border:1px solid rgba(15,118,110,.16);border-radius:.35rem;color:#0f766e;font-size:.7rem;font-weight:600;line-height:1rem;padding:.05rem .4rem;}",
+      ".headscale-device-user-toggle{align-items:center;background:transparent;border:0;border-radius:.35rem;color:inherit;cursor:pointer;display:flex;height:2rem;justify-content:center;margin:-.25rem;width:2rem;}",
+      ".headscale-device-user-toggle:hover{background:rgba(15,23,42,.06);}",
+      ".headscale-device-user-toggle:focus-visible{outline:2px solid rgba(15,118,110,.65);outline-offset:2px;}",
+      ".headscale-device-user-body{border-left:2px solid rgba(15,118,110,.16);margin:.45rem 0 0 .45rem;padding:.2rem 0 0 .75rem;}",
+      ".headscale-device-user-body>.card-primary.bg-base-200{background:rgba(255,255,255,.46);border:1px solid rgba(15,23,42,.08);box-shadow:none;margin-top:.35rem;}",
+      ".headscale-device-user-body>.card-primary.bg-base-200:hover{background:rgba(255,255,255,.68);}",
       ".headscale-user-sort-button{min-width:3rem;}"
     ].join("");
     document.head.appendChild(style);
@@ -183,16 +192,19 @@
     var body = document.createElement("div");
     var collapsed = collapsedUsers.has(userName);
 
-    group.className = "card-primary bg-base-200";
+    group.className = "card-primary bg-base-200 headscale-device-user-group";
     group.setAttribute(GROUP_ATTR, "true");
-    header.className = "flex justify-between";
-    label.className = "font-bold";
+    header.className = "flex justify-between headscale-device-user-heading";
+    left.className = "headscale-device-user-title";
+    label.className = "font-bold headscale-device-user-name";
     label.textContent = userName;
     count.className = "headscale-device-user-count";
     count.textContent = userCards.length + " " + (userCards.length === 1 ? "device" : "devices");
+    button.className = "headscale-device-user-toggle";
     button.type = "button";
     button.setAttribute(HEADER_ATTR, "true");
     button.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    button.setAttribute("aria-label", collapsed ? "Expand " + userName + " devices" : "Collapse " + userName + " devices");
     button.title = collapsed ? "Expand " + userName + " devices" : "Collapse " + userName + " devices";
     button.appendChild(createChevron(collapsed));
     button.addEventListener("click", function () {
@@ -203,7 +215,7 @@
       }
       scheduleApply();
     });
-    body.className = "mt-2 pt-2 pl-2 headscale-device-user-body";
+    body.className = "headscale-device-user-body";
     body.hidden = collapsed;
     body.style.display = collapsed ? "none" : "";
 
@@ -215,6 +227,7 @@
     userCards.forEach(function (card) {
       card.hidden = false;
       card.style.display = "";
+      card.classList.add("headscale-device-user-device-card");
       card.setAttribute("data-headscale-device-user", userName);
       body.appendChild(card);
     });
@@ -240,6 +253,7 @@
         Array.from(group.querySelectorAll(".card-primary.bg-base-200")).filter(function (card) {
           return !card.hasAttribute(GROUP_ATTR) && getDeviceId(card) !== null;
         }).forEach(function (card) {
+          card.classList.remove("headscale-device-user-device-card");
           parent.insertBefore(card, group);
         });
       }
@@ -254,6 +268,7 @@
     getDeviceCards().forEach(function (card) {
       card.hidden = false;
       card.style.display = "";
+      card.classList.remove("headscale-device-user-device-card");
       card.removeAttribute("data-headscale-device-user");
     });
   }
