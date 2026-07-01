@@ -47,6 +47,75 @@ sys.exit(0 if data == old_default else 1)
 PY
 }
 
+migrate_trusted_proxies() {
+  python3 - "${CONFIG_PATH}" <<'PY'
+import re
+import sys
+
+path = sys.argv[1]
+with open(path, "r", encoding="utf-8") as handle:
+    lines = handle.readlines()
+
+trusted_proxies_default = [
+    "trusted_proxies:\n",
+    "  - 127.0.0.1/32\n",
+    "  - ::1/128\n",
+]
+
+trust_key_re = re.compile(r"^trusted_proxies:\s*")
+trust_empty_re = re.compile(r"^trusted_proxies:\s*\[\s*\]\s*(?:#.*)?$")
+
+has_top_level_trusted_proxies = False
+has_empty_trusted_proxies = False
+for line in lines:
+    if trust_key_re.match(line):
+        has_top_level_trusted_proxies = True
+        if trust_empty_re.match(line):
+            has_empty_trusted_proxies = True
+        break
+
+updated_lines = lines
+
+if has_empty_trusted_proxies:
+    updated_lines = []
+    for line in lines:
+        if trust_empty_re.match(line):
+            updated_lines.extend(trusted_proxies_default)
+        else:
+            updated_lines.append(line)
+elif not has_top_level_trusted_proxies:
+    insert_after = None
+    anchor_order = [
+        "grpc_allow_insecure:",
+        "grpc_listen_addr:",
+        "listen_addr:",
+        "server_url:",
+    ]
+    for index, line in enumerate(lines):
+        if line.startswith("grpc_allow_insecure:"):
+            insert_after = index
+            break
+    if insert_after is not None:
+        updated_lines = lines[:insert_after + 1] + trusted_proxies_default + lines[insert_after + 1:]
+    else:
+        for anchor in anchor_order[1:]:
+            for index, line in enumerate(lines):
+                if line.startswith(anchor):
+                    insert_after = index
+                    break
+            if insert_after is not None:
+                break
+        if insert_after is not None:
+            updated_lines = lines[:insert_after + 1] + trusted_proxies_default + lines[insert_after + 1:]
+        else:
+            updated_lines = trusted_proxies_default + lines
+
+if updated_lines != lines:
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.writelines(updated_lines)
+PY
+}
+
 mkdir -p /app/data /run/headscale "${CADDY_DATA_DIR}" "${CADDY_CONFIG_DIR}" "${UI_RUNTIME_DIR}"
 
 if [ ! -f "${ACL_PATH}" ]; then
@@ -67,6 +136,9 @@ listen_addr: ${HEADSCALE_LISTEN_ADDR}
 metrics_listen_addr: 127.0.0.1:9090
 grpc_listen_addr: ${HEADSCALE_GRPC_ADDR}
 grpc_allow_insecure: false
+trusted_proxies:
+  - 127.0.0.1/32
+  - ::1/128
 
 noise:
   private_key_path: ${NOISE_KEY_PATH}
@@ -93,7 +165,10 @@ derp:
   update_frequency: "3h"
 
 disable_check_updates: false
-ephemeral_node_inactivity_timeout: "30m"
+node:
+  expiry: 0
+  ephemeral:
+    inactivity_timeout: "30m"
 
 database:
   type: sqlite
@@ -130,12 +205,16 @@ unix_socket_permission: "0770"
 
 logtail:
   enabled: false
-
-randomize_client_port: false
 EOF
 fi
 
 if [ -f "${CONFIG_PATH}" ]; then
+  migrate_trusted_proxies
+
+  if grep -q '^randomize_client_port:' "${CONFIG_PATH}"; then
+    sed -i '/^randomize_client_port:.*/d' "${CONFIG_PATH}"
+  fi
+
   if grep -qE '^listen_addr:\s*.*:8080\s*$' "${CONFIG_PATH}"; then
     sed -i "s#^listen_addr:.*#listen_addr: ${HEADSCALE_LISTEN_ADDR}#g" "${CONFIG_PATH}"
   fi

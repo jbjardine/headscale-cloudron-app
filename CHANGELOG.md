@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.29.2-1 - 2026-07-01
+
+- Bump upstream Headscale to 0.29.2 and update generated default config to v0.29 options.
+- Update bundled Headscale UI to 2026.03.17 and set base image to Alpine 3.24.
+
 ## 0.28.0-23 - 2026-07-01
 
 - Make Device View user group headers fully clickable and avoid rebuilding grouped device cards when opening device details.
