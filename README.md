@@ -34,7 +34,7 @@ The repository and GHCR package are public so third-party Cloudron installs can 
 Advanced users can install the published image directly from this package directory:
 
 ```sh
-cloudron install --location headscale --image ghcr.io/jbjardine/headscale-cloudron-app:v0.29.2-1
+cloudron install --location headscale --image ghcr.io/jbjardine/headscale-cloudron-app:v0.29.2-2
 ```
 
 ## Updates

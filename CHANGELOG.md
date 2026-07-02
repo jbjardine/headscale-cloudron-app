@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.29.2-2 - 2026-07-02
+
+- Restore the generated default policy to Headscale's allow-all behavior by omitting ACL and grants sections.
+- Migrate the exact generated empty ACL policy to the allow-all default with a timestamped backup.
+
 ## 0.29.2-1 - 2026-07-01
 
 - Bump upstream Headscale to 0.29.2 and update generated default config to v0.29 options.

@@ -16,10 +16,25 @@ UI_RUNTIME_DIR="/run/headscale-ui"
 
 write_default_acl() {
   cat > "${ACL_PATH}" <<'EOF'
-{
-  "acls": []
-}
+{}
 EOF
+}
+
+is_generated_empty_acl() {
+  python3 - "${ACL_PATH}" <<'PY'
+import json
+import sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as handle:
+        data = json.load(handle)
+except Exception:
+    sys.exit(1)
+
+empty_acl_default = {"acls": []}
+
+sys.exit(0 if data == empty_acl_default else 1)
+PY
 }
 
 is_generated_allow_all_acl() {
@@ -119,6 +134,9 @@ PY
 mkdir -p /app/data /run/headscale "${CADDY_DATA_DIR}" "${CADDY_CONFIG_DIR}" "${UI_RUNTIME_DIR}"
 
 if [ ! -f "${ACL_PATH}" ]; then
+  write_default_acl
+elif is_generated_empty_acl; then
+  cp "${ACL_PATH}" "${ACL_PATH}.deny-all-default-$(date -u +%Y%m%d%H%M%S)"
   write_default_acl
 elif is_generated_allow_all_acl; then
   cp "${ACL_PATH}" "${ACL_PATH}.allow-all-default-$(date -u +%Y%m%d%H%M%S)"
