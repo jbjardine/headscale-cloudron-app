@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.29.3-1 - 2026-08-03
+
+- Bump upstream Headscale to 0.29.3.
+
 ## 0.29.2-2 - 2026-07-02
 
 - Restore the generated default policy to Headscale's allow-all behavior by omitting ACL and grants sections.
