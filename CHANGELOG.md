@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.29.3-2 - 2026-09-21
+
+- Rebuild for updated alpine:3.24 digest.
+
 ## 0.29.3-1 - 2026-08-03
 
 - Bump upstream Headscale to 0.29.3.
