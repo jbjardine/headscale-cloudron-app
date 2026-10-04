@@ -183,7 +183,7 @@ class GatewayManager:
         directory = self.directory / ("headscale-" + settings["headscaleUserId"])
         directory.mkdir(mode=0o700, exist_ok=True)
         key_path = directory / "enrollment.key"
-        # Registered tsnet identities reuse their encrypted persistent state.
+        # Registered tsnet identities reuse their private persistent state.
         # Only an unregistered identity needs a fresh short-lived join key.
         if (directory / "enrolled").is_file() and (directory / "tailscaled.state").is_file():
             return
