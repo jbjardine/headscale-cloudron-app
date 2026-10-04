@@ -204,6 +204,46 @@ const {chromium} = require('playwright');
     await page.getByText('Machine expired.', {exact: true}).waitFor();
     realNodes = (await (await request.get(base + '/web/api/v1/node')).json()).nodes;
     assert(Date.parse(realNodes.find(n => n.id === fixtureNodes[0].id).expiry) <= Date.now());
+    // Exercise legacy response fields while keeping mutations against the real node API.
+    const legacyNodeShape = async route => {
+      const response = await route.fetch();const data = await response.json();
+      for (const node of data.nodes) {
+        if (node.id === fixtureNodes[2].id) {
+          node.forcedTags = node.tags;node.tags = [];node.validTags = ['tag:browser-qa', 'tag:effective-qa'];
+          node.availableRoutes = [];node.subnetRoutes = ['10.14.0.0/24'];
+        }
+        if (node.id === fixtureNodes[3].id) {node.tags = [];node.forcedTags = [];node.validTags = ['tag:effective-only'];}
+      }
+      await route.fulfill({response, json: data});
+    };
+    await context.route('**/web/api/v1/node', legacyNodeShape);
+    await page.reload();
+    await page.waitForFunction(() => document.querySelectorAll('[data-node-id]').length === 20);
+    assert.equal(await page.locator('[data-group-user-id=tagged] [data-node-id]').count(), 2, 'Legacy and effective tags lost tagged ownership');
+    await taggedDevice.locator('summary').click();
+    await taggedDevice.getByRole('button', {name: 'Edit tags', exact: true}).click();
+    assert.equal(await page.getByRole('dialog').getByLabel('Tags', {exact: true}).inputValue(), 'tag:browser-qa, tag:effective-qa');
+    await page.getByRole('dialog').getByRole('button', {name: 'Cancel', exact: true}).click();
+    await taggedDevice.getByLabel('10.14.0.0/24', {exact: true}).check();
+    const saveLegacyRoutes = async () => {
+      const saved = page.waitForResponse(r => r.url().endsWith('/node/' + fixtureNodes[2].id + '/approve_routes') && r.request().method() === 'POST');
+      const [response] = await Promise.all([saved, taggedDevice.getByRole('button', {name: 'Save approved routes', exact: true}).click()]);
+      assert(response.ok(), 'Legacy subnet route approval failed');
+      await page.waitForFunction(id => {
+        const button = document.querySelector('[data-node-id="' + id + '"] form button');
+        return button && !button.disabled;
+      }, fixtureNodes[2].id);
+    };
+    await saveLegacyRoutes();
+    realNodes = (await (await request.get(base + '/web/api/v1/node')).json()).nodes;
+    assert.deepEqual(realNodes.find(n => n.id === fixtureNodes[2].id).approvedRoutes, ['10.14.0.0/24']);
+    await taggedDevice.getByLabel('10.14.0.0/24', {exact: true}).uncheck();
+    await saveLegacyRoutes();
+    realNodes = (await (await request.get(base + '/web/api/v1/node')).json()).nodes;
+    assert.deepEqual(realNodes.find(n => n.id === fixtureNodes[2].id).approvedRoutes, []);
+    await context.unroute('**/web/api/v1/node', legacyNodeShape);
+    await page.reload();
+    await page.waitForFunction(() => document.querySelectorAll('[data-node-id]').length === 20);
     await capture('08-devices-desktop');
     const disposable = page.locator('[data-node-id="' + fixtureNodes[1].id + '"]');
     await disposable.locator('summary').click();
@@ -229,6 +269,14 @@ const {chromium} = require('playwright');
     await userCard.getByRole('link', {name: 'View machines', exact: true}).click();
     await page.waitForFunction(() => document.querySelectorAll('[data-node-id]').length === 5);
     assert.equal(await page.getByLabel('User', {exact: true}).inputValue(), String(created.user.id));
+    await page.getByLabel('User', {exact: true}).selectOption('');
+    assert.equal(await page.locator('[data-node-id]').count(), 19);
+    await page.getByRole('button', {name: 'Refresh', exact: true}).click();
+    await page.waitForFunction(() => !document.getElementById('refresh-devices').disabled);
+    assert.equal(await page.getByLabel('User', {exact: true}).inputValue(), '', 'Refresh reapplied a cleared user filter');
+    assert.equal(await page.locator('[data-node-id]').count(), 19);
+    await page.reload();await page.waitForFunction(() => !document.getElementById('refresh-devices').disabled);
+    assert.equal(await page.getByLabel('User', {exact: true}).inputValue(), '', 'Reload reapplied a cleared user filter');
     await page.goto(base + '/web/settings.html');
     await page.getByText('Connected', {exact: true}).waitFor();
     assert.equal(await page.getByLabel('Login server', {exact: true}).inputValue(), base);

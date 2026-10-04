@@ -7,7 +7,7 @@
   function userId(node) { return nodeTags(node).length ? "tagged" : String((node.user || {}).id || "none"); }
   function userName(node) { return nodeTags(node).length ? "Tagged machines" : (node.user && node.user.id ? ui.userName(node.user) : "Unassigned machines"); }
   function nodeName(node) { return node.givenName || node.name || "Machine " + node.id; }
-  function nodeTags(node) { return node.tags || node.forcedTags || []; }
+  function nodeTags(node) { return Array.from(new Set([].concat(node.tags || [], node.forcedTags || [], node.validTags || []))); }
   function fact(list, label, value) { list.append(ui.element("dt", "", label), ui.element("dd", "", value)); }
   function action(parent, label, handler, dangerous) { var button = ui.element("button", "pkg-button" + (dangerous ? " pkg-danger" : ""), label);button.type = "button";button.addEventListener("click", handler);parent.appendChild(button); }
   function device(node) {
@@ -19,7 +19,7 @@
     var content = ui.element("div", "pkg-entry-body"), facts = ui.element("dl", "pkg-facts");
     fact(facts, "User", userName(node));fact(facts, "Hostname", node.name || name);fact(facts, "Addresses", (node.ipAddresses || []).join(", ") || "Not assigned");
     fact(facts, "Last seen", node.online ? "Online now" : (Date.parse(node.lastSeen) > 0 ? ui.date(node.lastSeen) : "Never"));fact(facts, "Created", ui.date(node.createdAt));fact(facts, "Expiry", Date.parse(node.expiry) > 0 ? ui.date(node.expiry) : "No expiry");
-    fact(facts, "Tags", (node.validTags || []).concat(nodeTags(node)).filter(function (tag, i, all) { return all.indexOf(tag) === i; }).join(", ") || "None");content.appendChild(facts);
+    fact(facts, "Tags", nodeTags(node).join(", ") || "None");content.appendChild(facts);
     var actions = ui.element("div", "pkg-actions");
     action(actions, "Rename machine", function () {
       ui.formDialog("Rename " + name, "", [{name: "name", label: "Machine name", value: name}], "Save name", async function (value) {
@@ -42,7 +42,7 @@
         await ui.api("/api/v1/node/" + encodeURIComponent(id), {method: "DELETE"});await load();ui.message("Machine deleted.");
       }, true);
     });content.appendChild(actions);
-    var routes = Array.from(new Set((node.availableRoutes || []).concat(node.approvedRoutes || [])));
+    var routes = Array.from(new Set((node.availableRoutes || []).concat(node.subnetRoutes || [], node.approvedRoutes || [])));
     if (routes.length) {
       content.appendChild(ui.element("h3", "", "Subnet routes"));var form = ui.element("form"), inputs = [];
       routes.forEach(function (route) { var label = ui.element("label", "pkg-check"), checkbox = ui.element("input");checkbox.type = "checkbox";checkbox.value = route;checkbox.checked = (node.approvedRoutes || []).includes(route);inputs.push(checkbox);label.append(checkbox, document.createTextNode(route));form.appendChild(label); });
@@ -88,7 +88,12 @@
     } catch (error) { if (version === loading) { ui.message(error.message, true);$("devices").replaceChildren(ui.element("p", "pkg-empty", "Machines could not be loaded. Try Refresh.")); } }
     finally { if (version === loading) $("refresh-devices").disabled = false; }
   }
-  $("device-search").addEventListener("input", render);$("device-user").addEventListener("change", render);$("device-sort").addEventListener("change", render);
+  $("device-search").addEventListener("input", render);$("device-sort").addEventListener("change", render);
+  $("device-user").addEventListener("change", function () {
+    var url = new URL(location.href);
+    if (this.value) url.searchParams.set("user", this.value);else url.searchParams.delete("user");
+    history.replaceState(null, "", url);render();
+  });
   $("group-users").addEventListener("click", function () { grouped = !grouped;ui.remember("headscale-package-group-devices", String(grouped));render(); });$("refresh-devices").addEventListener("click", load);
   $("register-device").addEventListener("submit", async function (event) {
     event.preventDefault();$("register-submit").disabled = true;
