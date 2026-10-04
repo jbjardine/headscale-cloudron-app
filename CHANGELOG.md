@@ -12,6 +12,7 @@
 - Support IPv6 destinations, choose unused default service ports and report enrollment or process startup failures as errors.
 - Test API contracts, local tsnet forwarding, browser flows and restart persistence before publishing an image or updating the Cloudron catalog.
 - Isolate upstream dependency updates and tests from publication credentials; pass the tested image and allowed release files to separate publishing jobs.
+- Restrict automatic releases to main and check its validated base before pushing images.
 - Track stable Headscale, Headscale UI, Tailscale SDK and Alpine updates weekly, with SHA256/module checksum verification and downgrade protection.
 
 ## 0.29.4-1 - 2026-09-28

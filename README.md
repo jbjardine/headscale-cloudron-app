@@ -78,7 +78,7 @@ The one-hour Headscale key used internally is only for the gateway's initial reg
 
 ## Weekly updates
 
-Every Monday at **03:17 UTC**, `Autopublish upstream updates` checks stable Headscale, Headscale UI, Tailscale SDK and Alpine releases. It can also be run manually. It rejects downgrades, verifies binary/archive SHA256 hashes and Go module checksums, updates versions/checksums and prepares the next Cloudron package version.
+Every Monday at **03:17 UTC**, `Autopublish upstream updates` checks stable Headscale, Headscale UI, Tailscale SDK and Alpine releases. It can also be run manually from `main`; dispatches from other branches or tags stop before preparing a release. It rejects downgrades, verifies binary/archive SHA256 hashes and Go module checksums, updates versions/checksums and prepares the next Cloudron package version.
 
 Before publishing, it runs API/security regression tests, local tsnet forwarding tests, a reachable-vulnerability check with the Go vulnerability database, a Docker build, real packaged key creation/expiration and SDK enrollment tests, restart persistence checks, desktop/mobile browser flows, Cloudron catalog verification and workflow lint. A failure stops publication. The **same tested image** is pushed to GHCR before the Git tag and Cloudron catalog update; a failed image push cannot advertise a missing image. Missing release artifacts can be repaired by rerunning the workflow.
 
@@ -89,7 +89,7 @@ The current package tracks:
 - Tailscale gateway SDK `1.102.5`
 - Alpine `3.24`
 
-Validation and upstream dependency updates run in separate jobs with read permissions and no persisted checkout credentials. The publishing jobs receive the tested image and release data through artifacts; only those jobs have write permissions, and they handle the candidate as data without running its code. Catalog updates copy only the allowed release files into a checkout of the workflow's trusted base commit. Manual GHCR publishing uses the same separation.
+Validation and upstream dependency updates run in separate jobs with read permissions and no persisted checkout credentials. The publishing jobs receive the tested image and release data through artifacts; only those jobs have write permissions, and they handle the candidate as data without running its code. Catalog updates copy only the allowed release files into a checkout of the workflow's trusted base commit. Automatic publication stops before pushing an image if `main` has advanced during validation. Manual GHCR publishing uses the same permission separation.
 
 Automatic checks publish package releases; Cloudron's own update/backup settings control installation on a running server. Only the publication jobs receive `GITHUB_TOKEN` repository contents or package write permissions. Branch protection must allow the existing automation to publish to `main`, or publication will stop at the Git push.
 

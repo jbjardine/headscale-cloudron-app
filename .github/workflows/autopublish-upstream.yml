@@ -28,6 +28,13 @@ jobs:
       needs_release: ${{ steps.publication.outputs.needs_release }}
 
     steps:
+      - name: Require main for automatic publication
+        run: |
+          if [ "$GITHUB_REF" != 'refs/heads/main' ]; then
+            echo "::error::Automatic publication must run from the main branch."
+            exit 1
+          fi
+
       - name: Checkout main
         uses: actions/checkout@v5
         with:
@@ -267,7 +274,7 @@ jobs:
 
   publish:
     needs: prepare
-    if: needs.prepare.outputs.needs_publish == 'true'
+    if: github.ref == 'refs/heads/main' && needs.prepare.outputs.needs_publish == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -276,6 +283,17 @@ jobs:
       GH_REPO: ${{ github.repository }}
 
     steps:
+      - name: Confirm main still matches the validated base
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          main_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
+          if [ "$main_sha" != "$GITHUB_SHA" ]; then
+            echo "::error::Main changed during validation. Start a new run from main."
+            exit 1
+          fi
+
       - name: Checkout the trusted base for the catalog commit
         if: needs.prepare.outputs.needs_git == 'true'
         uses: actions/checkout@v5
