@@ -177,6 +177,11 @@ jobs:
           cd gateway
           go test -race ./...
 
+      - name: Check Go dependencies for reachable vulnerabilities
+        if: steps.publication.outputs.needs_publish == 'true'
+        working-directory: gateway
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
       - name: Build candidate Docker image
         if: steps.publication.outputs.needs_publish == 'true'
         uses: docker/build-push-action@v7

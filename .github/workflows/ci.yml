@@ -74,6 +74,10 @@ jobs:
           cd gateway
           go test -race ./...
 
+      - name: Check Go dependencies for reachable vulnerabilities
+        working-directory: gateway
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 

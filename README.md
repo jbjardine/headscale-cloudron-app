@@ -78,7 +78,7 @@ The one-hour Headscale key used internally is only for the gateway's initial reg
 
 Every Monday at **03:17 UTC**, `Autopublish upstream updates` checks stable Headscale, Headscale UI, Tailscale SDK and Alpine releases. It can also be run manually. It rejects downgrades, verifies binary/archive SHA256 hashes and Go module checksums, updates versions/checksums and prepares the next Cloudron package version.
 
-Before publishing, it runs API/security regression tests, local tsnet forwarding tests, a Docker build, real packaged key creation/expiration and SDK enrollment tests, restart persistence checks, desktop/mobile browser flows, Cloudron catalog verification and workflow lint. A failure stops publication. The **same tested image** is pushed to GHCR before the Git tag and Cloudron catalog update; a failed image push cannot advertise a missing image. Missing release artifacts can be repaired by rerunning the workflow.
+Before publishing, it runs API/security regression tests, local tsnet forwarding tests, a reachable-vulnerability check with the Go vulnerability database, a Docker build, real packaged key creation/expiration and SDK enrollment tests, restart persistence checks, desktop/mobile browser flows, Cloudron catalog verification and workflow lint. A failure stops publication. The **same tested image** is pushed to GHCR before the Git tag and Cloudron catalog update; a failed image push cannot advertise a missing image. Missing release artifacts can be repaired by rerunning the workflow.
 
 The current package tracks:
 
@@ -94,6 +94,7 @@ Automatic checks publish package releases; Cloudron's own update/backup settings
 ```sh
 python3 -m unittest discover -s tests -v
 (cd gateway && go test -race ./...)
+(cd gateway && go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...)
 docker build -t headscale-cloudron-app:check .
 python3 scripts/smoke_image.py --check-tsnet --image headscale-cloudron-app:check
 npm ci --prefix tests/browser
