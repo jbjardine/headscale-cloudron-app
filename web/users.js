@@ -24,8 +24,8 @@
       var id = String(user.id), name = ui.userName(user), devices = nodes.filter(function (node) { return userId(node) === id; });
       var allKeys = keys.filter(function (key) { return userId(key) === id; }), active = allKeys.filter(function (key) { return ui.keyState(key) === "Active"; });
       var card = ui.element("details", "pkg-entry");card.dataset.userId = id;card.open = expanded.has(id);
-      card.addEventListener("toggle", function () { if (!card.isConnected) return;if (card.open) expanded.add(id);else expanded.delete(id); });
       var summary = ui.element("summary"), title = ui.element("span", "pkg-entry-name", name);title.appendChild(ui.element("span", "pkg-entry-id", "#" + id));summary.appendChild(title);
+      summary.addEventListener("click", function () { if (card.open) expanded.delete(id);else expanded.add(id); });
       summary.appendChild(ui.element("span", "pkg-entry-meta", devices.length + " machines · " + active.length + " active keys"));card.appendChild(summary);
       var content = ui.element("div", "pkg-entry-body"), facts = ui.element("dl", "pkg-facts");
       fact(facts, "Username", user.name || name);fact(facts, "Email", user.email || "Not set");fact(facts, "Created", ui.date(user.createdAt));content.appendChild(facts);

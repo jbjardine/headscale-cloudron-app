@@ -12,8 +12,8 @@
   function action(parent, label, handler, dangerous) { var button = ui.element("button", "pkg-button" + (dangerous ? " pkg-danger" : ""), label);button.type = "button";button.addEventListener("click", handler);parent.appendChild(button); }
   function device(node) {
     var id = String(node.id), name = nodeName(node), card = ui.element("details", "pkg-entry");card.dataset.nodeId = id;card.open = expanded.has(id);
-    card.addEventListener("toggle", function () { if (!card.isConnected) return;if (card.open) expanded.add(id);else expanded.delete(id); });
     var summary = ui.element("summary"), dot = ui.element("span", "pkg-state-dot" + (node.online ? " pkg-state-dot-online" : ""));dot.setAttribute("aria-hidden", "true");summary.appendChild(dot);
+    summary.addEventListener("click", function () { if (card.open) expanded.delete(id);else expanded.add(id); });
     var title = ui.element("span", "pkg-entry-name", name);title.appendChild(ui.element("span", "pkg-entry-id", "#" + id));summary.appendChild(title);
     summary.appendChild(ui.element("span", "pkg-entry-meta", (node.online ? "Online" : "Offline") + " · " + (node.ipAddresses || []).join(" · ")));card.appendChild(summary);
     var content = ui.element("div", "pkg-entry-body"), facts = ui.element("dl", "pkg-facts");
@@ -69,8 +69,8 @@
     var groups = new Map();filtered.forEach(function (node) { var id = userId(node);if (!groups.has(id)) groups.set(id, {name: userName(node), nodes: []});groups.get(id).nodes.push(node); });
     Array.from(groups.entries()).sort(function (a, b) { return a[1].name.localeCompare(b[1].name, undefined, {sensitivity: "base"}); }).forEach(function (entry) {
       var id = entry[0], group = entry[1], details = ui.element("details", "pkg-device-group");details.dataset.groupUserId = id;details.open = Boolean(query) || !collapsed.has(id);
-      details.addEventListener("toggle", function () { if (!details.isConnected || query) return;if (details.open) collapsed.delete(id);else collapsed.add(id);ui.remember("headscale-package-collapsed-users", JSON.stringify(Array.from(collapsed))); });
       var summary = ui.element("summary"), title = ui.element("span", "pkg-entry-name", group.name);summary.appendChild(title);
+      summary.addEventListener("click", function () { if (query) return;if (details.open) collapsed.add(id);else collapsed.delete(id);ui.remember("headscale-package-collapsed-users", JSON.stringify(Array.from(collapsed))); });
       summary.appendChild(ui.element("span", "pkg-entry-meta", group.nodes.length + " machines · " + group.nodes.filter(function (node) { return node.online; }).length + " online"));details.appendChild(summary);
       group.nodes.forEach(function (node) { details.appendChild(device(node)); });$("devices").appendChild(details);
     });
