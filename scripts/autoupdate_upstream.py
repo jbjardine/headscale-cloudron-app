@@ -265,6 +265,8 @@ def release_notes(version, reasons):
             "- Docker build before publishing",
             "- API and gateway regression tests",
             "- Packaged API creation/expiry/restart smoke test",
+            "- Embedded DERP relay/client verification and public STUN port checks",
+            "- Original source/image artifact digest verification",
             "- Desktop and mobile enrollment/gateway browser tests",
         ]
     )

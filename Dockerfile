@@ -20,7 +20,7 @@ ENV HEADSCALE_VERSION=0.29.4 \
 RUN --mount=type=secret,id=proxy_ca \
     set -eu; \
     if [ -f /run/secrets/proxy_ca ]; then export SSL_CERT_FILE=/run/secrets/proxy_ca; fi; \
-    apk add --no-cache bash ca-certificates curl python3 su-exec unzip caddy supervisor sqlite; \
+    apk add --no-cache bash ca-certificates curl python3 py3-yaml su-exec unzip caddy supervisor sqlite; \
     adduser -S -H -s /sbin/nologin cloudron; \
     mkdir -p /app/code/ui
 
@@ -56,6 +56,7 @@ COPY Caddyfile /app/code/Caddyfile
 COPY supervisord.conf /app/code/supervisord.conf
 COPY ui-api-proxy.py /app/code/ui-api-proxy.py
 COPY gateway_settings.py /app/code/gateway_settings.py
+COPY derp_config.py /app/code/derp_config.py
 COPY --from=gateway-build /out/headscale-gateway /usr/local/bin/headscale-gateway
 COPY gateway/TAILSCALE-LICENSE /app/code/licenses/TAILSCALE-LICENSE
 COPY ui-init.sh /app/code/ui-init.sh

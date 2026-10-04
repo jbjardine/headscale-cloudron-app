@@ -20,6 +20,8 @@ jobs:
   prepare:
     runs-on: ubuntu-latest
     outputs:
+      source_artifact_id: ${{ steps.snapshot_upload.outputs.artifact-id }}
+      source_sha256: ${{ steps.snapshot.outputs.sha256 }}
       tag: ${{ steps.bump.outputs.tag }}
       changed: ${{ steps.bump.outputs.changed }}
       needs_publish: ${{ steps.publication.outputs.needs_publish }}
@@ -64,49 +66,6 @@ jobs:
 
           test -s "${{ steps.bump.outputs.release_notes_path }}"
           git diff -- Dockerfile gateway/go.mod gateway/go.sum CloudronManifest.json CloudronVersions.json README.md CHANGELOG.md .github/upstream-state.json
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: "24"
-
-      - name: Install Cloudron CLI
-        run: npm install -g cloudron
-
-      - name: Verify Cloudron versions catalog
-        run: cloudron versions verify
-
-      - name: Check manifest/catalog coherence
-        run: |
-          python3 - <<'PY'
-          import json
-
-          with open("CloudronManifest.json", encoding="utf-8") as handle:
-              manifest = json.load(handle)
-          with open("CloudronVersions.json", encoding="utf-8") as handle:
-              versions = json.load(handle)
-
-          version = manifest["version"]
-          entry = versions["versions"].get(version)
-          if not entry:
-              raise SystemExit(f"CloudronVersions.json is missing version {version}")
-
-          catalog_manifest = entry["manifest"]
-          expected_image = f"ghcr.io/jbjardine/headscale-cloudron-app:v{version}"
-          if catalog_manifest.get("version") != version:
-              raise SystemExit("manifest version mismatch")
-          if catalog_manifest.get("dockerImage") != expected_image:
-              raise SystemExit(f"unexpected dockerImage: {catalog_manifest.get('dockerImage')}")
-
-          for field in ("addons", "capabilities", "udpPorts", "mediaLinks", "iconUrl"):
-              if field not in catalog_manifest:
-                  raise SystemExit(f"catalog manifest missing {field}")
-
-          print("Cloudron catalog coherence OK")
-          PY
-
-      - name: Lint GitHub Actions workflows
-        run: go run github.com/rhysd/actionlint/cmd/actionlint@latest
 
       - name: Check publication state
         id: publication
@@ -180,100 +139,34 @@ jobs:
           RELEASE_TAG: ${{ steps.bump.outputs.tag }}
         run: git checkout --detach "${RELEASE_TAG}"
 
-      - name: Set up Docker Buildx
+      - name: Freeze generated sources before running dependency code
         if: steps.publication.outputs.needs_publish == 'true'
-        uses: docker/setup-buildx-action@v4
-
-      - name: Run regression tests
-        if: steps.publication.outputs.needs_publish == 'true'
+        id: snapshot
         run: |
-          python3 -m unittest discover -s tests -v
-          for script in web/*.js; do node --check "$script"; done
-          cd gateway
-          go test -race ./...
+          digest=$(python3 scripts/publication_bundle.py freeze "$RUNNER_TEMP/headscale-inputs/snapshot.tar.gz" --generated --notes)
+          echo "sha256=$digest" >> "$GITHUB_OUTPUT"
 
-      - name: Check Go dependencies for reachable vulnerabilities
+      - name: Save original source snapshot
         if: steps.publication.outputs.needs_publish == 'true'
-        working-directory: gateway
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
-
-      - name: Build candidate Docker image
-        if: steps.publication.outputs.needs_publish == 'true'
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          push: false
-          load: true
-          tags: headscale-cloudron-app:autopublish-check
-          pull: true
-
-      - name: Test packaged API and persistence
-        if: steps.publication.outputs.needs_publish == 'true'
-        run: python3 scripts/smoke_image.py --check-tsnet --image headscale-cloudron-app:autopublish-check
-
-      - name: Test desktop and mobile UI
-        if: steps.publication.outputs.needs_publish == 'true'
-        env:
-          HEADSCALE_QA_DIR: ${{ runner.temp }}/headscale-ui-qa
-        run: |
-          npm ci --prefix tests/browser
-          npx --prefix tests/browser playwright install --with-deps chromium
-          node tests/browser/smoke.cjs headscale-cloudron-app:autopublish-check
-
-
-      - name: Save UI screenshots
-        if: always()
-        continue-on-error: true
+        id: snapshot_upload
         uses: actions/upload-artifact@v7
         with:
-          name: headscale-ui-screenshots
-          path: ${{ runner.temp }}/headscale-ui-qa/*.png
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: Export the tested publication candidate
-        if: steps.publication.outputs.needs_publish == 'true'
-        env:
-          RELEASE_TAG: ${{ steps.bump.outputs.tag }}
-          NEEDS_IMAGE: ${{ steps.publication.outputs.needs_image }}
-        run: |
-          set -euo pipefail
-          destination="$RUNNER_TEMP/headscale-publication"
-          mkdir -p "$destination/source/gateway" "$destination/source/.github"
-          for file in Dockerfile gateway/go.mod gateway/go.sum CloudronManifest.json CloudronVersions.json README.md CHANGELOG.md .github/upstream-state.json; do
-            install -m 644 "$file" "$destination/source/$file"
-          done
-          install -m 644 dist/autoupdate-release-notes.md "$destination/release-notes.md"
-          tar \
-            --exclude='.git' \
-            --exclude='./.git' \
-            --exclude='.github' \
-            --exclude='./.github' \
-            --exclude='.workflow' \
-            --exclude='./.workflow' \
-            --exclude='dist' \
-            --exclude='./dist' \
-            --exclude='node_modules' \
-            --exclude='*/node_modules' \
-            --exclude='__pycache__' \
-            -czf "$destination/headscale-cloudron-app-${RELEASE_TAG}.tar.gz" .
-          if [ "$NEEDS_IMAGE" = 'true' ]; then
-            docker save headscale-cloudron-app:autopublish-check -o "$destination/image.tar"
-          fi
-
-      - name: Save publication candidate
-        if: steps.publication.outputs.needs_publish == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: autopublish-candidate
-          path: ${{ runner.temp }}/headscale-publication/
-          include-hidden-files: true
+          name: frozen-source
+          path: ${{ runner.temp }}/headscale-inputs/snapshot.tar.gz
           compression-level: 0
           retention-days: 1
           if-no-files-found: error
 
-  publish:
+  candidate:
     needs: prepare
+    if: needs.prepare.outputs.needs_publish == 'true'
+    uses: ./.github/workflows/build-and-validate.yml
+    with:
+      source_artifact_id: ${{ needs.prepare.outputs.source_artifact_id }}
+      source_sha256: ${{ needs.prepare.outputs.source_sha256 }}
+
+  publish:
+    needs: [prepare, candidate]
     if: github.ref == 'refs/heads/main' && needs.prepare.outputs.needs_publish == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -295,74 +188,48 @@ jobs:
           fi
 
       - name: Checkout the trusted base for the catalog commit
-        if: needs.prepare.outputs.needs_git == 'true'
         uses: actions/checkout@v5
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Download the tested candidate
+      - name: Download original inputs by immutable artifact ID
         uses: actions/download-artifact@v8
         with:
-          name: autopublish-candidate
-          path: ${{ runner.temp }}/headscale-publication
+          artifact-ids: ${{ needs.prepare.outputs.source_artifact_id }},${{ needs.candidate.outputs.image_artifact_id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/headscale-inputs
 
-      - name: Validate publication data and copy only catalog files
+      - name: Authenticate publication inputs and copy only release data
         env:
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          SOURCE_SHA256: ${{ needs.prepare.outputs.source_sha256 }}
+          IMAGE_SHA256: ${{ needs.candidate.outputs.image_sha256 }}
+          IMAGE_ID: ${{ needs.candidate.outputs.image_id }}
           CHANGED: ${{ needs.prepare.outputs.changed }}
-          NEEDS_IMAGE: ${{ needs.prepare.outputs.needs_image }}
           NEEDS_GIT: ${{ needs.prepare.outputs.needs_git }}
-          NEEDS_RELEASE: ${{ needs.prepare.outputs.needs_release }}
         run: |
-          python3 - <<'PYTHON'
-          import json
-          import os
-          import re
-          import shutil
+          set -euo pipefail
+          [[ "$CHANGED" == 'true' || "$CHANGED" == 'false' ]]
+          [[ "$NEEDS_GIT" == 'true' || "$NEEDS_GIT" == 'false' ]]
+          if [ "$CHANGED" = 'true' ] && [ "$NEEDS_GIT" != 'true' ]; then
+            exit 1
+          fi
+          python3 - <<'PY'
+          import hashlib, os, re
           from pathlib import Path
-
-          tag = os.environ['RELEASE_TAG']
-          if not re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+', tag):
-              raise SystemExit('Invalid release tag')
-          for key in ('CHANGED', 'NEEDS_IMAGE', 'NEEDS_GIT', 'NEEDS_RELEASE'):
-              if os.environ[key] not in ('true', 'false'):
-                  raise SystemExit('Invalid publication flag')
-          candidate = Path(os.environ['RUNNER_TEMP']) / 'headscale-publication'
-          source = candidate / 'source'
-          files = ('Dockerfile', 'gateway/go.mod', 'gateway/go.sum',
-                   'CloudronManifest.json', 'CloudronVersions.json', 'README.md',
-                   'CHANGELOG.md', '.github/upstream-state.json')
-          for name in (*files, '../release-notes.md'):
-              file = source / name
-              if not file.is_file() or file.is_symlink() or not file.resolve().is_relative_to(candidate.resolve()):
-                  raise SystemExit('Invalid publication file')
-          manifest = json.loads((source / 'CloudronManifest.json').read_text())
-          catalog = json.loads((source / 'CloudronVersions.json').read_text())
-          version = tag.removeprefix('v')
-          entry = catalog['versions'][version]
-          expected_image = 'ghcr.io/jbjardine/headscale-cloudron-app:' + tag
-          if manifest.get('id') != 'io.github.jbjardine.headscale-cloudron-app' or manifest.get('version') != version:
-              raise SystemExit('Release manifest mismatch')
-          if entry.get('publishState') != 'published' or entry['manifest'].get('dockerImage') != expected_image or entry['manifest'].get('version') != version:
-              raise SystemExit('Release catalog mismatch')
-          for flag, name in (('NEEDS_IMAGE', 'image.tar'), ('NEEDS_RELEASE', f'headscale-cloudron-app-{tag}.tar.gz')):
-              file = candidate / name
-              if os.environ[flag] == 'true' and (not file.is_file() or file.is_symlink()):
-                  raise SystemExit('Missing publication artifact')
-          if os.environ['CHANGED'] == 'true':
-              if os.environ['NEEDS_GIT'] != 'true':
-                  raise SystemExit('Changed catalog needs a Git commit')
-              for name in files:
-                  destination = Path(name)
-                  destination.parent.mkdir(parents=True, exist_ok=True)
-                  shutil.copyfile(source / name, destination)
-          PYTHON
-
-      - name: Load the tested image without rebuilding
-        if: needs.prepare.outputs.needs_image == 'true'
-        run: docker load -i "$RUNNER_TEMP/headscale-publication/image.tar"
+          expected = os.environ['IMAGE_SHA256']
+          with (Path(os.environ['RUNNER_TEMP']) / 'headscale-inputs/image.tar').open('rb') as handle:
+              if not re.fullmatch(r'[0-9a-f]{64}', expected) or hashlib.file_digest(handle, 'sha256').hexdigest() != expected:
+                  raise SystemExit('Image artifact digest mismatch')
+          PY
+          # This helper is from the reviewed base checkout, not the candidate.
+          args=()
+          if [ "$CHANGED" = 'true' ]; then args+=(--copy-to "$GITHUB_WORKSPACE"); fi
+          python3 scripts/publication_bundle.py publication-data "$RUNNER_TEMP/headscale-inputs/snapshot.tar.gz" "$SOURCE_SHA256" "$RELEASE_TAG" "$RUNNER_TEMP/headscale-publication" "${args[@]}"
+          docker load -i "$RUNNER_TEMP/headscale-inputs/image.tar"
+          test "$(docker image inspect headscale-cloudron-app:candidate --format '{{.Id}}')" = "$IMAGE_ID"
 
       - name: Log in to GHCR
         if: needs.prepare.outputs.needs_image == 'true'
@@ -378,9 +245,9 @@ jobs:
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         run: |
           set -euo pipefail
-          docker tag headscale-cloudron-app:autopublish-check "${IMAGE_NAME}:${RELEASE_TAG}"
+          docker tag headscale-cloudron-app:candidate "${IMAGE_NAME}:${RELEASE_TAG}"
           docker push "${IMAGE_NAME}:${RELEASE_TAG}"
-          docker tag headscale-cloudron-app:autopublish-check "${IMAGE_NAME}:latest"
+          docker tag headscale-cloudron-app:candidate "${IMAGE_NAME}:latest"
           docker push "${IMAGE_NAME}:latest"
 
       - name: Commit and tag automatic update

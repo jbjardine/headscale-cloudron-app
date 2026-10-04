@@ -26,7 +26,7 @@ jobs:
           node-version: "24"
 
       - name: Install Cloudron CLI
-        run: npm install -g cloudron
+        run: npm install -g cloudron@9.0.3
 
       - name: Verify Cloudron versions catalog
         run: cloudron versions verify
@@ -67,18 +67,26 @@ jobs:
           cache-dependency-path: gateway/go.sum
 
       - name: Lint GitHub Actions workflows
-        run: go run github.com/rhysd/actionlint/cmd/actionlint@latest
+        run: scripts/go_in_container.py run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/*.yml
+
+      - name: Set up Python for configuration tests
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install YAML parser for configuration tests
+        run: python3 -m pip install PyYAML==6.0.3
 
       - name: Run regression tests
         run: |
           python3 -m unittest discover -s tests -v
           for script in web/*.js; do node --check "$script"; done
           cd gateway
-          go test -race ./...
+          ../scripts/go_in_container.py test -race ./...
 
       - name: Check Go dependencies for reachable vulnerabilities
         working-directory: gateway
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+        run: ../scripts/go_in_container.py run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -92,7 +100,7 @@ jobs:
           tags: headscale-cloudron-app:ci
 
       - name: Test packaged API and persistence
-        run: python3 scripts/smoke_image.py --check-tsnet --image headscale-cloudron-app:ci
+        run: python3 scripts/smoke_image.py --check-tsnet --check-derp --go-binary "$GITHUB_WORKSPACE/scripts/go_in_container.py" --image headscale-cloudron-app:ci
 
       - name: Test desktop and mobile UI
         env:

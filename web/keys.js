@@ -44,7 +44,7 @@
       head.appendChild(header);table.appendChild(head);
       var body = ui.element("tbody");
       keys.slice().reverse().forEach(function (key) {
-        var expired = !key.expiration || new Date(key.expiration).getTime() <= Date.now();
+        var expired = Boolean(key.expiration) && new Date(key.expiration).getTime() <= Date.now();
         var used = key.used && !key.reusable;
         var row = ui.element("tr");
         row.appendChild(ui.element("td", "", "#" + key.id));

@@ -76,11 +76,19 @@ Keys and identity state live under `/app/data/gateway` with private permissions 
 
 The one-hour Headscale key used internally is only for the gateway's initial registration; its registered identity survives subsequent app restarts. Official Tailscale node expiration is controlled in your Tailscale account, independently of auth-key expiration.
 
+## Embedded DERP and STUN
+
+The embedded relay remains optional. Set `derp.server.enabled: true` in `/app/data/config.yaml`, then restart the app. Keep `verify_clients: true` so only machines registered with this Headscale can use the relay. HTTPS DERP traffic uses the app's normal public hostname; STUN uses the optional UDP port selected in Cloudron (3479 by default).
+
+The package advertises Cloudron's external STUN port while keeping the container listener on 3478. It backs up the configuration before replacing the automatically generated region with a runtime map, preserves other regions and regenerates that map after each restart or port change. Explicit custom DERP maps remain under your control. Disabling the Cloudron UDP port disables STUN advertisement; HTTPS relay traffic can still work. Ensure the selected UDP port is allowed by your VPS firewall.
+
+The image smoke test enables DERP only in disposable local data, registers two SDK clients, relays packets in both directions through the packaged proxy, rejects an unknown node and checks a real STUN binding response. It repeats these checks after restart and confirms the relay's private identity persists.
+
 ## Weekly updates
 
 Every Monday at **03:17 UTC**, `Autopublish upstream updates` checks stable Headscale, Headscale UI, Tailscale SDK and Alpine releases. It can also be run manually from `main`; dispatches from other branches or tags stop before preparing a release. It rejects downgrades, verifies binary/archive SHA256 hashes and Go module checksums, updates versions/checksums and prepares the next Cloudron package version.
 
-Before publishing, it runs API/security regression tests, local tsnet forwarding tests, a reachable-vulnerability check with the Go vulnerability database, a Docker build, real packaged key creation/expiration and SDK enrollment tests, restart persistence checks, desktop/mobile browser flows, Cloudron catalog verification and workflow lint. A failure stops publication. The **same tested image** is pushed to GHCR before the Git tag and Cloudron catalog update; a failed image push cannot advertise a missing image. Missing release artifacts can be repaired by rerunning the workflow.
+Before publishing, it runs API/security regression tests, local tsnet forwarding tests, a reachable-vulnerability check with the Go vulnerability database, a Docker build, real packaged key creation/expiration and SDK enrollment tests, embedded DERP/STUN checks, restart persistence checks, desktop/mobile browser flows, Cloudron catalog verification and workflow lint. A failure stops publication. The **same tested image** is pushed to GHCR before the Git tag and Cloudron catalog update; a failed image push cannot advertise a missing image. Missing release artifacts can be repaired by rerunning the workflow.
 
 The current package tracks:
 
@@ -89,18 +97,19 @@ The current package tracks:
 - Tailscale gateway SDK `1.102.5`
 - Alpine `3.24`
 
-Validation and upstream dependency updates run in separate jobs with read permissions and no persisted checkout credentials. The publishing jobs receive the tested image and release data through artifacts; only those jobs have write permissions, and they handle the candidate as data without running its code. Catalog updates copy only the allowed release files into a checkout of the workflow's trusted base commit. Automatic publication stops before pushing an image if `main` has advanced during validation. Manual GHCR publishing uses the same permission separation.
+The preparation job freezes tracked source files and generated release notes before any updated dependency code runs. A separate build job exports the image before running it. Validation and publication each download those original artifacts by immutable IDs and verify their SHA256 digests and Docker image identity. Go SDK tests run inside a container with read-only sources, isolated caches and no host credentials or Docker socket. All preparation/build/test jobs have read permissions and no persisted checkout credentials. Only the publishing job has write permissions; it uses a helper from the reviewed base commit to handle release inputs as data and copy the allowed release files. The public source archive also comes from the original snapshot. Automatic publication stops before pushing an image if `main` has advanced during validation. Manual GHCR publishing uses the same build, validation and artifact checks.
 
 Automatic checks publish package releases; Cloudron's own update/backup settings control installation on a running server. Only the publication jobs receive `GITHUB_TOKEN` repository contents or package write permissions. Branch protection must allow the existing automation to publish to `main`, or publication will stop at the Git push.
 
 ## Build and test
 
 ```sh
+python3 -m pip install PyYAML==6.0.3
 python3 -m unittest discover -s tests -v
-(cd gateway && go test -race ./...)
-(cd gateway && go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...)
+(cd gateway && ../scripts/go_in_container.py test -race ./...)
+(cd gateway && ../scripts/go_in_container.py run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...)
 docker build -t headscale-cloudron-app:check .
-python3 scripts/smoke_image.py --check-tsnet --image headscale-cloudron-app:check
+python3 scripts/smoke_image.py --check-tsnet --check-derp --go-binary "$PWD/scripts/go_in_container.py" --image headscale-cloudron-app:check
 npm ci --prefix tests/browser
 npx --prefix tests/browser playwright install --with-deps chromium
 node tests/browser/smoke.cjs headscale-cloudron-app:check

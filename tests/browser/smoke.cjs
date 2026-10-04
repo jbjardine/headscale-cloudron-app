@@ -75,6 +75,25 @@ const {chromium} = require('playwright');
     await page.getByText('Key expired. Existing machines remain registered.').waitFor();
     const listed = await (await request.get(base + '/web/api/v1/preauthkey?user=' + created.user.id)).json();
     assert(Date.parse(listed.preAuthKeys.find(k => k.id === created.id).expiration) <= Date.now());
+    // Display-only API fixture for non-expiring keys; no fake key is revoked.
+    const noExpiryPattern = '**/web/api/v1/preauthkey?user=*';
+    const noExpiryRoute = async route => route.fulfill({json: {preAuthKeys: [
+      {id: '9001', expiration: null, reusable: true, used: false},
+      {id: '9002', reusable: true, used: false},
+      {id: '9003', expiration: '2000-01-01T00:00:00Z', reusable: true, used: false},
+    ]}});
+    await context.route(noExpiryPattern, noExpiryRoute);
+    await page.reload();
+    for (const id of ['9001', '9002']) {
+      const row = page.locator('#key-list tbody tr').filter({hasText: '#' + id});
+      await row.getByText('No expiry', {exact: true}).waitFor();
+      await row.getByText('Active', {exact: true}).waitFor();
+      assert.equal(await row.getByRole('button', {name: 'Expire enrollment key ' + id, exact: true}).isEnabled(), true);
+    }
+    const expiredFixture = page.locator('#key-list tbody tr').filter({hasText: '#9003'});
+    await expiredFixture.getByText('Expired', {exact: true}).waitFor();
+    assert.equal(await expiredFixture.getByRole('button').count(), 0);
+    await context.unroute(noExpiryPattern, noExpiryRoute);
     // The upstream UI must also show the secret it previously discarded.
     await page.goto(base + '/web/users.html');
     await page.getByText(username).click();

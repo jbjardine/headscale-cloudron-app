@@ -107,42 +107,130 @@ func TestIdleBridgeCloses(t *testing.T) {
 	}
 }
 
-type testListener struct { connections chan net.Conn; done chan struct{}; once sync.Once }
-func (l *testListener) Accept() (net.Conn, error) { select { case connection := <-l.connections: return connection, nil; case <-l.done: return nil, net.ErrClosed } }
-func (l *testListener) Close() error { l.once.Do(func(){ close(l.done) }); return nil }
+type testListener struct {
+	connections chan net.Conn
+	done        chan struct{}
+	once        sync.Once
+}
+
+func (l *testListener) Accept() (net.Conn, error) {
+	select {
+	case connection := <-l.connections:
+		return connection, nil
+	case <-l.done:
+		return nil, net.ErrClosed
+	}
+}
+func (l *testListener) Close() error   { l.once.Do(func() { close(l.done) }); return nil }
 func (l *testListener) Addr() net.Addr { return &net.TCPAddr{} }
-type sourceConnection struct { net.Conn; source net.Addr }
+
+type sourceConnection struct {
+	net.Conn
+	source net.Addr
+}
+
 func (c sourceConnection) RemoteAddr() net.Addr { return c.source }
 
 func TestConnectionLimitAndSourcesRejectBeforeDial(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background()); defer cancel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	listener := &testListener{connections: make(chan net.Conn), done: make(chan struct{})}
 	dialed := make(chan string, 3)
 	f := &forwarder{mode: "restricted", sources: []netip.Prefix{netip.MustParsePrefix("100.100.100.1/32")}, slots: make(chan struct{}, 1), idle: time.Second, stats: &counters{}}
-	f.dial = func(_ context.Context, _, address string) (net.Conn, error) { a, b := net.Pipe(); t.Cleanup(func(){ b.Close() }); dialed <- address; return a, nil }
+	f.dial = func(_ context.Context, _, address string) (net.Conn, error) {
+		a, b := net.Pipe()
+		t.Cleanup(func() { b.Close() })
+		dialed <- address
+		return a, nil
+	}
 	go f.serve(ctx, listener, "100.64.0.7:445")
-	connect := func(ip string) net.Conn { a, b := net.Pipe(); listener.connections <- sourceConnection{b, &net.TCPAddr{IP: net.ParseIP(ip), Port: 12000}}; return a }
-	first := connect("100.100.100.1"); defer first.Close()
-	select { case address := <-dialed: if address != "100.64.0.7:445" { t.Fatal(address) }; case <-time.After(time.Second): t.Fatal("allowed connection was not dialed") }
+	connect := func(ip string) net.Conn {
+		a, b := net.Pipe()
+		listener.connections <- sourceConnection{b, &net.TCPAddr{IP: net.ParseIP(ip), Port: 12000}}
+		return a
+	}
+	first := connect("100.100.100.1")
+	defer first.Close()
+	select {
+	case address := <-dialed:
+		if address != "100.64.0.7:445" {
+			t.Fatal(address)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("allowed connection was not dialed")
+	}
 	for _, source := range []string{"100.100.100.1", "100.100.100.2"} {
-		connection := connect(source); connection.SetReadDeadline(time.Now().Add(time.Second))
+		connection := connect(source)
+		connection.SetReadDeadline(time.Now().Add(time.Second))
 		var one [1]byte
-		if _, err := connection.Read(one[:]); err != io.EOF { t.Fatalf("rejected source remained connected: %v", err) }
+		if _, err := connection.Read(one[:]); err != io.EOF {
+			t.Fatalf("rejected source remained connected: %v", err)
+		}
 		connection.Close()
 	}
-	if f.stats.denied.Load() != 2 { t.Fatal("incorrect rejection count") }
-	select { case <-dialed: t.Fatal("rejected connection reached destination"); default: }
+	if f.stats.denied.Load() != 2 {
+		t.Fatal("incorrect rejection count")
+	}
+	select {
+	case <-dialed:
+		t.Fatal("rejected connection reached destination")
+	default:
+	}
 }
 
 func TestSharedBandwidthLimiterDelaysTraffic(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background()); defer cancel()
-	client, incoming := net.Pipe(); outgoing, service := net.Pipe()
-	defer client.Close(); defer service.Close()
-	f := &forwarder{idle: 2*time.Second, stats: &counters{}, limiter: rate.NewLimiter(32768, 16*1024)}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	client, incoming := net.Pipe()
+	outgoing, service := net.Pipe()
+	defer client.Close()
+	defer service.Close()
+	f := &forwarder{idle: 2 * time.Second, stats: &counters{}, limiter: rate.NewLimiter(32768, 16*1024)}
 	go f.bridge(ctx, incoming, outgoing)
 	payload := make([]byte, 32*1024)
 	started := time.Now()
 	go client.Write(payload)
-	if _, err := io.ReadFull(service, payload); err != nil { t.Fatal(err) }
-	if time.Since(started) < 400*time.Millisecond { t.Fatal("bandwidth limit was bypassed") }
+	if _, err := io.ReadFull(service, payload); err != nil {
+		t.Fatal(err)
+	}
+	if time.Since(started) < 400*time.Millisecond {
+		t.Fatal("bandwidth limit was bypassed")
+	}
+}
+
+func TestBothBandwidthWaitsRespectIdleTimeout(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	client, incoming := net.Pipe()
+	outgoing, service := net.Pipe()
+	defer client.Close()
+	defer service.Close()
+	limiter := rate.NewLimiter(1, 1)
+	if !limiter.Allow() {
+		t.Fatal("could not consume initial bandwidth burst")
+	}
+	f := &forwarder{idle: 40 * time.Millisecond, stats: &counters{}, limiter: limiter}
+	done := make(chan struct{})
+	go func() { f.bridge(ctx, incoming, outgoing); close(done) }()
+	writes := make(chan error, 2)
+	go func() { _, err := client.Write([]byte("a")); writes <- err }()
+	go func() { _, err := service.Write([]byte("b")); writes <- err }()
+	for range 2 {
+		select {
+		case err := <-writes:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("both directions did not reach the bandwidth wait")
+		}
+	}
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("bandwidth reservations retained an idle connection")
+	}
+	if f.stats.transferred.Load() != 0 {
+		t.Fatal("traffic exceeded the exhausted bandwidth budget")
+	}
 }

@@ -184,9 +184,35 @@ func (f *forwarder) serve(ctx context.Context, listener net.Listener, target str
 func (f *forwarder) bridge(ctx context.Context, a, b net.Conn) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	go func() { <-ctx.Done(); a.Close(); b.Close() }()
-	touch := func() { deadline := time.Now().Add(f.idle); a.SetDeadline(deadline); b.SetDeadline(deadline) }
+	var idleDeadline atomic.Int64
+	touch := func() {
+		deadline := time.Now().Add(f.idle)
+		idleDeadline.Store(deadline.UnixNano())
+		a.SetDeadline(deadline)
+		b.SetDeadline(deadline)
+	}
 	touch()
+	// Socket deadlines cannot interrupt a bandwidth reservation. This watchdog
+	// also cancels limiter waits when neither direction makes progress.
+	go func() {
+		defer a.Close()
+		defer b.Close()
+		timer := time.NewTimer(f.idle)
+		defer timer.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-timer.C:
+				remaining := time.Until(time.Unix(0, idleDeadline.Load()))
+				if remaining <= 0 {
+					cancel()
+					return
+				}
+				timer.Reset(remaining)
+			}
+		}
+	}()
 	done := make(chan struct{}, 2)
 	copyStream := func(dst, src net.Conn) {
 		defer func() { done <- struct{}{} }()
