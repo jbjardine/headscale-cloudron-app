@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 import urllib.parse
 import urllib.request
@@ -18,6 +19,7 @@ VERSIONS = ROOT / "CloudronVersions.json"
 CHANGELOG = ROOT / "CHANGELOG.md"
 README = ROOT / "README.md"
 STATE = ROOT / ".github" / "upstream-state.json"
+GATEWAY = ROOT / "gateway"
 RELEASE_NOTES = ROOT / "dist" / "autoupdate-release-notes.md"
 IMAGE_NAME = "ghcr.io/jbjardine/headscale-cloudron-app"
 HEADSCALE_VERSION_RE = re.compile(r"\d+\.\d+\.\d+")
@@ -59,10 +61,28 @@ def github_headers():
 
 
 def latest_github_release(repo):
-    return request_json(
+    release = request_json(
         f"https://api.github.com/repos/{repo}/releases/latest",
         headers=github_headers(),
     )
+    if release.get("prerelease") or release.get("draft"):
+        raise SystemExit(f"Refusing a draft or prerelease from {repo}")
+    return release
+
+
+def tailscale_latest():
+    release = latest_github_release("tailscale/tailscale")
+    version = require_match("Tailscale version", release["tag_name"].removeprefix("v"), HEADSCALE_VERSION_RE)
+    module = request_bytes(f"https://raw.githubusercontent.com/tailscale/tailscale/v{version}/go.mod").decode()
+    match = re.search(r"^go ([0-9.]+)$", module, re.MULTILINE)
+    if not match:
+        raise SystemExit("Could not determine the Tailscale Go toolchain requirement")
+    return {"version": version, "go_version": require_match("Go version", match[1], HEADSCALE_VERSION_RE)}
+
+
+def refuse_downgrade(label, current, candidate):
+    if tuple(map(int, candidate.split("."))) < tuple(map(int, current.split("."))):
+        raise SystemExit(f"Refusing to downgrade {label} from {current} to {candidate}")
 
 
 def asset_digest(asset):
@@ -243,6 +263,11 @@ def release_notes(version, reasons):
             "- manifest/catalog coherence check",
             "- GitHub Actions workflow lint",
             "- Docker build before publishing",
+            "- API and gateway regression tests",
+            "- Packaged API creation/expiry/restart smoke test",
+            "- Embedded DERP relay/client verification and public STUN port checks",
+            "- Original source/image artifact digest verification",
+            "- Desktop and mobile enrollment/gateway browser tests",
         ]
     )
     return "\n".join(lines) + "\n"
@@ -272,9 +297,17 @@ def main():
     versions = read_json(VERSIONS)
     state = load_state()
     require_match("current package version", manifest["version"], PACKAGE_VERSION_RE)
+    pending_entry = versions["versions"].get(manifest["version"], {})
+    pending = pending_entry.get("publishState") == "testing"
 
     headscale = headscale_latest()
     ui = headscale_ui_latest()
+    tailscale = tailscale_latest()
+    gateway_module = (GATEWAY / "go.mod").read_text()
+    current_tailscale = re.search(r"tailscale.com v([0-9.]+)", gateway_module)[1]
+    refuse_downgrade("Headscale", current["headscale_version"], headscale["version"])
+    refuse_downgrade("Headscale UI", current["headscale_ui_version"], ui["version"])
+    refuse_downgrade("Tailscale", current_tailscale, tailscale["version"])
     alpine_tag = latest_alpine_tag()
     alpine_tag_digest = alpine_digest(alpine_tag)
     current_alpine_digest = alpine_digest(current["alpine"])
@@ -282,6 +315,12 @@ def main():
     reasons = []
     new_docker_text = docker_text
     target_headscale_version = current["headscale_version"]
+
+    if tailscale["version"] != current_tailscale:
+        reasons.append(f"Update the official Tailscale gateway SDK to {tailscale['version']}.")
+        subprocess.run(["go", "mod", "edit", f"-require=tailscale.com@v{tailscale['version']}", f"-go={tailscale['go_version']}"], cwd=GATEWAY, check=True)
+        subprocess.run(["go", "mod", "tidy"], cwd=GATEWAY, check=True)
+        new_docker_text = re.sub(r"^FROM golang:\S+ AS gateway-build$", f"FROM golang:{tailscale['go_version']}-alpine AS gateway-build", new_docker_text, flags=re.MULTILINE)
 
     if headscale["version"] != current["headscale_version"]:
         target_headscale_version = headscale["version"]
@@ -306,7 +345,7 @@ def main():
     elif state.get("alpine_digest") and state.get("alpine_digest") != current_alpine_digest:
         reasons.append(f"Rebuild for updated alpine:{current['alpine']} digest.")
 
-    if not reasons:
+    if not reasons and not pending:
         RELEASE_NOTES.parent.mkdir(parents=True, exist_ok=True)
         RELEASE_NOTES.write_text(current_release_notes(manifest["version"], versions), encoding="utf-8")
         write_outputs(
@@ -324,11 +363,13 @@ def main():
         print("No upstream updates found.")
         return 0
 
-    new_version = next_package_version(
-        manifest["version"],
-        target_headscale_version,
-        versions["versions"],
-    )
+    if pending and target_headscale_version == manifest["upstreamVersion"]:
+        new_version = manifest["version"]
+    else:
+        new_version = next_package_version(manifest["version"], target_headscale_version, versions["versions"])
+    pending_notes = pending_entry.get("manifest", {}).get("changelog", "").lstrip("- ").strip() if pending else ""
+    if pending_notes:
+        reasons.insert(0, pending_notes)
     tag = f"v{new_version}"
     changelog_text = " ".join(reasons)
     notes = release_notes(new_version, reasons)
@@ -346,21 +387,29 @@ def main():
         "ts": cloudron_date(),
         "publishState": "published",
     }
+    if pending:
+        versions["versions"].pop(old_version, None)
     versions["versions"] = {new_version: entry, **versions["versions"]}
     write_json(VERSIONS, versions)
 
     changelog = CHANGELOG.read_text(encoding="utf-8")
-    CHANGELOG.write_text(
-        changelog.replace(
+    if pending:
+        changelog = re.sub(rf"^## {re.escape(old_version)} - [^\n]+", f"## {new_version} - {today()}", changelog, count=1, flags=re.MULTILINE)
+        extra_reasons = reasons[1:] if pending_notes else reasons
+        if extra_reasons:
+            changelog = changelog.replace(f"## {new_version} - {today()}\n\n", f"## {new_version} - {today()}\n\n" + "".join(f"- {reason}\n" for reason in extra_reasons), 1)
+    else:
+        changelog = changelog.replace(
             "# Changelog\n\n",
             f"# Changelog\n\n## {new_version} - {today()}\n\n- {changelog_text}\n\n",
             1,
-        ),
-        encoding="utf-8",
-    )
+        )
+    CHANGELOG.write_text(changelog, encoding="utf-8")
 
     readme = README.read_text(encoding="utf-8")
     readme = readme.replace(f"v{old_version}", tag)
+    for label, value in (("Headscale", target_headscale_version), ("Headscale UI", ui["version"]), ("Alpine", alpine_tag), ("Tailscale gateway SDK", tailscale["version"])):
+        readme = re.sub(rf"(^- {re.escape(label)} `)[^`]+(`)", rf"\g<1>{value}\2", readme, flags=re.MULTILINE)
     README.write_text(readme, encoding="utf-8")
 
     STATE.parent.mkdir(parents=True, exist_ok=True)
@@ -371,6 +420,7 @@ def main():
             "headscale_sha256": headscale["sha256"],
             "headscale_ui_version": ui["version"],
             "headscale_ui_sha256": ui["sha256"],
+            "tailscale_version": tailscale["version"],
             "alpine_tag": alpine_tag if alpine_tag != current["alpine"] else current["alpine"],
             "alpine_digest": alpine_tag_digest if alpine_tag != current["alpine"] else current_alpine_digest,
             "updated_at": dt.datetime.now(dt.timezone.utc).isoformat(),

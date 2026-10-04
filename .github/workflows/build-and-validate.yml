@@ -1,0 +1,189 @@
+name: Build and validate frozen release inputs
+
+on:
+  workflow_call:
+    inputs:
+      source_artifact_id:
+        type: string
+        required: true
+      source_sha256:
+        type: string
+        required: true
+    outputs:
+      image_artifact_id:
+        value: ${{ jobs.build.outputs.artifact_id }}
+      image_sha256:
+        value: ${{ jobs.build.outputs.sha256 }}
+      image_id:
+        value: ${{ jobs.build.outputs.image_id }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      sha256: ${{ steps.freeze.outputs.sha256 }}
+      image_id: ${{ steps.freeze.outputs.image_id }}
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}/headscale-source
+    steps:
+      - name: Download original frozen sources
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ inputs.source_artifact_id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/headscale-inputs
+
+      - name: Authenticate sources before extraction or execution
+        working-directory: ${{ runner.temp }}
+        env:
+          SOURCE_SHA256: ${{ inputs.source_sha256 }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, os, re, tarfile
+          from pathlib import Path, PurePosixPath
+          snapshot = Path(os.environ['RUNNER_TEMP']) / 'headscale-inputs/snapshot.tar.gz'
+          expected = os.environ['SOURCE_SHA256']
+          with snapshot.open('rb') as handle:
+              if not re.fullmatch(r'[0-9a-f]{64}', expected) or hashlib.file_digest(handle, 'sha256').hexdigest() != expected:
+                  raise SystemExit('Source snapshot digest mismatch')
+          with tarfile.open(snapshot) as archive:
+              seen = set()
+              for member in archive:
+                  path = PurePosixPath(member.name)
+                  if not member.isfile() or path.is_absolute() or '..' in path.parts or member.name != path.as_posix() or member.name in seen:
+                      raise SystemExit('Invalid source snapshot entry')
+                  seen.add(member.name)
+              archive.extractall(Path(os.environ['GITHUB_WORKSPACE']) / 'headscale-source', filter='data')
+          PY
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build from original frozen sources
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ github.workspace }}/headscale-source
+          push: false
+          load: true
+          tags: headscale-cloudron-app:candidate
+          pull: true
+
+      - name: Freeze image before running it or SDK integration tests
+        id: freeze
+        run: |
+          mkdir -p "$RUNNER_TEMP/headscale-image"
+          docker save headscale-cloudron-app:candidate -o "$RUNNER_TEMP/headscale-image/image.tar"
+          echo "sha256=$(sha256sum "$RUNNER_TEMP/headscale-image/image.tar" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+          echo "image_id=$(docker image inspect headscale-cloudron-app:candidate --format '{{.Id}}')" >> "$GITHUB_OUTPUT"
+
+      - name: Save original built image
+        id: upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: frozen-image
+          path: ${{ runner.temp }}/headscale-image/image.tar
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
+
+  validate:
+    needs: build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}/headscale-source
+    steps:
+      - name: Download original source and image artifacts by immutable ID
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ inputs.source_artifact_id }},${{ needs.build.outputs.artifact_id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/headscale-inputs
+
+      - name: Authenticate original inputs before validation
+        working-directory: ${{ runner.temp }}
+        env:
+          SOURCE_SHA256: ${{ inputs.source_sha256 }}
+          IMAGE_SHA256: ${{ needs.build.outputs.sha256 }}
+          IMAGE_ID: ${{ needs.build.outputs.image_id }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, os, re, tarfile
+          from pathlib import Path, PurePosixPath
+          inputs = Path(os.environ['RUNNER_TEMP']) / 'headscale-inputs'
+          for name, variable in (('snapshot.tar.gz', 'SOURCE_SHA256'), ('image.tar', 'IMAGE_SHA256')):
+              with (inputs / name).open('rb') as handle:
+                  expected = os.environ[variable]
+                  if not re.fullmatch(r'[0-9a-f]{64}', expected) or hashlib.file_digest(handle, 'sha256').hexdigest() != expected:
+                      raise SystemExit('Release input digest mismatch')
+          with tarfile.open(inputs / 'snapshot.tar.gz') as archive:
+              seen = set()
+              for member in archive:
+                  path = PurePosixPath(member.name)
+                  if not member.isfile() or path.is_absolute() or '..' in path.parts or member.name != path.as_posix() or member.name in seen:
+                      raise SystemExit('Invalid source snapshot entry')
+                  seen.add(member.name)
+              archive.extractall(Path(os.environ['GITHUB_WORKSPACE']) / 'headscale-source', filter='data')
+          PY
+          docker load -i "$RUNNER_TEMP/headscale-inputs/image.tar"
+          test "$(docker image inspect headscale-cloudron-app:candidate --format '{{.Id}}')" = "$IMAGE_ID"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+
+      - name: Verify Cloudron catalog
+        run: |
+          npm install -g cloudron@9.0.3
+          cloudron versions verify
+
+      - name: Set up Python for configuration tests
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install YAML parser for configuration tests
+        run: python3 -m pip install PyYAML==6.0.3
+
+      - name: Run first-party regression tests
+        run: |
+          python3 -m unittest discover -s tests -v
+          for script in web/*.js; do node --check "$script"; done
+
+      - name: Run SDK tests with read-only sources and no host credentials
+        working-directory: ${{ github.workspace }}/headscale-source/gateway
+        run: ../scripts/go_in_container.py test -race ./...
+
+      - name: Check reachable Go vulnerabilities in isolation
+        working-directory: ${{ github.workspace }}/headscale-source/gateway
+        run: ../scripts/go_in_container.py run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
+      - name: Lint workflows in isolation
+        run: scripts/go_in_container.py run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/*.yml
+
+      - name: Test packaged API, persistence, SDK enrollment and DERP/STUN
+        run: python3 scripts/smoke_image.py --check-tsnet --check-derp --go-binary "$GITHUB_WORKSPACE/headscale-source/scripts/go_in_container.py" --image headscale-cloudron-app:candidate
+
+      - name: Test desktop and mobile UI
+        env:
+          HEADSCALE_QA_DIR: ${{ runner.temp }}/headscale-ui-qa
+        run: |
+          npm ci --prefix tests/browser
+          npx --prefix tests/browser playwright install --with-deps chromium
+          node tests/browser/smoke.cjs headscale-cloudron-app:candidate
+
+      - name: Save UI screenshots
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: headscale-ui-screenshots
+          path: ${{ runner.temp }}/headscale-ui-qa/*.png
+          if-no-files-found: warn
+          retention-days: 14

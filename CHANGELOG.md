@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.29.4-2 - 2026-10-04
+
+- Show and copy complete enrollment keys once, including keys created in the upstream UI.
+- Correct Headscale 0.29 user-key filtering and expire keys by their IDs instead of reporting a no-op success.
+- Keep non-expiring enrollment keys active and available for explicit expiration.
+- Add responsive enrollment and gateway pages with clear expiry and registration options.
+- Add an optional official Tailscale-to-Headscale TCP gateway with selected nodes/ports, source restrictions, connection/bandwidth limits and persistent isolated identities.
+- Keep gateway keys private and the gateway disabled by default; remove the unused NET_ADMIN capability.
+- Update golang.org/x/crypto to 0.56.0 for the latest SSH security fixes and check reachable Go vulnerabilities before publishing.
+- Revalidate saved Headscale node identities before startup and every forwarded connection, rejecting stale or reassigned destination addresses.
+- Support IPv6 destinations, choose unused default service ports and report enrollment or process startup failures as errors.
+- Apply the gateway idle timeout even when both traffic directions wait on the shared bandwidth limiter.
+- Advertise Cloudron's external STUN port for embedded DERP and preserve its identity across restarts; test bidirectional relay, client verification, UDP responses and disable/restart.
+- Test API contracts, local tsnet forwarding, browser flows and restart persistence before publishing an image or updating the Cloudron catalog.
+- Freeze sources before dependency execution and images before integration tests; authenticate original artifacts by immutable IDs, SHA256 and image identity before publication. Run SDK tests with read-only sources and no host credentials or Docker socket.
+- Restrict automatic releases to main and check its validated base before pushing images.
+- Track stable Headscale, Headscale UI, Tailscale SDK and Alpine updates weekly, with SHA256/module checksum verification and downgrade protection.
+
 ## 0.29.4-1 - 2026-09-28
 
 - Bump upstream Headscale to 0.29.4.

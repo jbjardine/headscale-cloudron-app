@@ -7,20 +7,23 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Git tag to build and publish, for example v0.28.0-20
+        description: Git tag to test and publish, for example v0.29.4-2
         required: true
         type: string
 
 permissions:
   contents: read
-  packages: write
 
 env:
   IMAGE_NAME: ghcr.io/jbjardine/headscale-cloudron-app
 
 jobs:
-  publish:
+  prepare:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.ref.outputs.tag }}
+      source_artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      source_sha256: ${{ steps.snapshot.outputs.sha256 }}
 
     steps:
       - name: Resolve release tag
@@ -36,20 +39,84 @@ jobs:
             tag="$INPUT_TAG"
           fi
 
-          if [[ -z "$tag" ]]; then
-            echo "A tag is required." >&2
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$ ]]; then
+            echo "A package release tag is required." >&2
             exit 1
           fi
 
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
+      - name: Checkout trusted workflow base
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Preserve trusted snapshot helper
+        run: install -m 644 scripts/publication_bundle.py "$RUNNER_TEMP/publication_bundle.py"
+
       - name: Checkout tag
         uses: actions/checkout@v5
         with:
           ref: ${{ steps.ref.outputs.tag }}
+          persist-credentials: false
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+      - name: Freeze release source before tests
+        id: snapshot
+        run: |
+          digest=$(python3 "$RUNNER_TEMP/publication_bundle.py" freeze "$RUNNER_TEMP/headscale-inputs/snapshot.tar.gz")
+          echo "sha256=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Save original source snapshot
+        id: upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: frozen-source
+          path: ${{ runner.temp }}/headscale-inputs/snapshot.tar.gz
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
+
+  candidate:
+    needs: prepare
+    uses: ./.github/workflows/build-and-validate.yml
+    with:
+      source_artifact_id: ${{ needs.prepare.outputs.source_artifact_id }}
+      source_sha256: ${{ needs.prepare.outputs.source_sha256 }}
+
+  publish:
+    needs: [prepare, candidate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Download original built image by immutable artifact ID
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ needs.candidate.outputs.image_artifact_id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/headscale-release-image
+
+      - name: Authenticate the release tag and original image
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          IMAGE_SHA256: ${{ needs.candidate.outputs.image_sha256 }}
+          IMAGE_ID: ${{ needs.candidate.outputs.image_id }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$ ]]
+          python3 - <<'PY'
+          import hashlib, os, re
+          from pathlib import Path
+          expected = os.environ['IMAGE_SHA256']
+          with (Path(os.environ['RUNNER_TEMP']) / 'headscale-release-image/image.tar').open('rb') as handle:
+              if not re.fullmatch(r'[0-9a-f]{64}', expected) or hashlib.file_digest(handle, 'sha256').hexdigest() != expected:
+                  raise SystemExit('Image artifact digest mismatch')
+          PY
+          docker load -i "$RUNNER_TEMP/headscale-release-image/image.tar"
+          test "$(docker image inspect headscale-cloudron-app:candidate --format '{{.Id}}')" = "$IMAGE_ID"
 
       - name: Log in to GHCR
         uses: docker/login-action@v4
@@ -58,19 +125,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Docker metadata
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=${{ steps.ref.outputs.tag }}
-            type=raw,value=latest
-
-      - name: Build and push image
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+      - name: Push the tested image
+        env:
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          docker tag headscale-cloudron-app:candidate "${IMAGE_NAME}:${RELEASE_TAG}"
+          docker push "${IMAGE_NAME}:${RELEASE_TAG}"
+          docker tag headscale-cloudron-app:candidate "${IMAGE_NAME}:latest"
+          docker push "${IMAGE_NAME}:latest"

@@ -228,6 +228,7 @@ fi
 
 if [ -f "${CONFIG_PATH}" ]; then
   migrate_trusted_proxies
+  python3 /app/code/derp_config.py "${CONFIG_PATH}"
 
   if grep -q '^randomize_client_port:' "${CONFIG_PATH}"; then
     sed -i '/^randomize_client_port:.*/d' "${CONFIG_PATH}"

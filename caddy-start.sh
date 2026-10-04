@@ -15,7 +15,4 @@ if [ ! -s "${KEY_FILE}" ]; then
   exit 1
 fi
 
-export HEADSCALE_UI_API_KEY
-HEADSCALE_UI_API_KEY="$(cat "${KEY_FILE}")"
-
 exec /usr/sbin/caddy run --config /app/code/Caddyfile --adapter caddyfile
