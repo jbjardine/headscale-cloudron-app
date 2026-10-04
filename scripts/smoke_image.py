@@ -153,7 +153,9 @@ def main():
                 wait_ready()
                 assert command("exec", name, "sha256sum", "/app/data/derp_server_private.key") == derp_key, "DERP identity changed after restart"
                 check_relay()
-                command("exec", name, "python3", "-c", "import yaml; p='/app/data/config.yaml'; c=yaml.safe_load(open(p)); c['derp']['server']['enabled']=False; open(p,'w').write(yaml.safe_dump(c,sort_keys=False))")
+                # Restore the normal fallback map before disabling our only
+                # fixture region: Headscale rejects a completely empty map.
+                command("exec", name, "python3", "-c", "import yaml; p='/app/data/config.yaml'; c=yaml.safe_load(open(p)); c['derp']['server']['enabled']=False; c['derp']['urls']=['https://controlplane.tailscale.com/derpmap/default']; open(p,'w').write(yaml.safe_dump(c,sort_keys=False))")
                 command("restart", name)
                 wait_ready()
                 print("Embedded DERP passed: bidirectional relay, registered-client verification, unknown-client rejection, public STUN UDP response/advertisement, stable identity after restart, disable/restart")
