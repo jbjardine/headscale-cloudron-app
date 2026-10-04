@@ -247,8 +247,6 @@ jobs:
           set -euo pipefail
           docker tag headscale-cloudron-app:candidate "${IMAGE_NAME}:${RELEASE_TAG}"
           docker push "${IMAGE_NAME}:${RELEASE_TAG}"
-          docker tag headscale-cloudron-app:candidate "${IMAGE_NAME}:latest"
-          docker push "${IMAGE_NAME}:latest"
 
       - name: Commit and tag automatic update
         if: needs.prepare.outputs.needs_git == 'true'
@@ -283,6 +281,13 @@ jobs:
           fi
 
           git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push --atomic origin HEAD:main "refs/tags/${RELEASE_TAG}"
+
+      - name: Publish latest after the catalog commit
+        if: needs.prepare.outputs.needs_image == 'true'
+        run: |
+          set -euo pipefail
+          docker tag headscale-cloudron-app:candidate "${IMAGE_NAME}:latest"
+          docker push "${IMAGE_NAME}:latest"
 
       - name: Publish GitHub release
         if: needs.prepare.outputs.needs_release == 'true'
