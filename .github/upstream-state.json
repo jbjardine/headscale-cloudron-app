@@ -3,8 +3,8 @@
   "headscale_sha256": "212ed0a884c0d3541e094c4bebbe94397df6f4e01bd3d7f059c520cb55e0d757",
   "headscale_ui_version": "2026.03.17",
   "headscale_ui_sha256": "e959dde83569233a8643917e5c58f596b433709556b86f9e998c729d01a6cb29",
+  "tailscale_version": "1.102.5",
   "alpine_tag": "3.24",
   "alpine_digest": "sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6",
-  "updated_at": "2026-09-28T09:41:51.026923+00:00",
-  "tailscale_version": "1.102.5"
+  "updated_at": "2026-10-04T13:23:16.294992+00:00"
 }
