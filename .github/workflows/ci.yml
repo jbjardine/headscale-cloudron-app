@@ -105,4 +105,3 @@ jobs:
           path: ${{ runner.temp }}/headscale-ui-qa/*.png
           if-no-files-found: warn
           retention-days: 14
-
