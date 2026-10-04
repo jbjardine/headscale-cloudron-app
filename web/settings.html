@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en"><head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Settings · Headscale</title><link rel="stylesheet" href="/web/package-ui.css">
+  <script src="/web/config.js"></script><script src="/web/package-ui.js" defer></script><script src="/web/settings.js" defer></script>
+</head><body class="pkg-shell">
+  <aside class="pkg-sidebar"></aside><main class="pkg-main">
+    <h1>Settings</h1>
+    <div id="message" role="status" aria-live="polite" hidden></div>
+    <div class="pkg-layout">
+      <section class="pkg-card"><h2>Server connection</h2><div id="server-status" class="pkg-status" role="status">Checking connection…</div>
+        <label for="login-server">Login server</label><input id="login-server" readonly><p class="pkg-field-help">Use this address when connecting a new machine.</p>
+        <p class="pkg-note">Authentication: Cloudron. API credentials: managed on the server.</p>
+        <div class="pkg-actions"><button id="test-connection" class="pkg-button" type="button">Test connection</button><a class="pkg-button" href="/web/keys.html">Add a machine</a></div>
+        <p id="connection-checked" class="pkg-field-help"></p>
+      </section>
+      <section class="pkg-card"><h2>Appearance</h2><label for="theme">Theme</label><select id="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="system">Follow system</option></select>
+        <p class="pkg-field-help">Saved for all pages in this browser.</p>
+        <h3>Versions</h3><dl id="versions" class="pkg-facts"><dt>App package</dt><dd>Loading…</dd></dl>
+      </section>
+    </div>
+  </main>
+</body></html>

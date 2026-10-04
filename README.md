@@ -12,23 +12,29 @@ Add this community app store URL under **App Store → Settings** in Cloudron:
 https://raw.githubusercontent.com/jbjardine/headscale-cloudron-app/main/CloudronVersions.json
 ```
 
-Install **Headscale**, then open **Configure**. The prepared `0.29.4-2` catalog entry stays in `testing` until the publication workflow has tested and pushed its image. Run that workflow manually after merging, or wait for its weekly run. Once published, advanced direct installation from the package directory is:
+Install **Headscale**, then open **Configure**. The prepared `0.29.4-3` catalog entry stays in `testing` until the publication workflow has tested and pushed its image. Run that workflow manually after merging, or wait for its weekly run. Once published, advanced direct installation from the package directory is:
 
 ```sh
-cloudron install --location headscale --image ghcr.io/jbjardine/headscale-cloudron-app:v0.29.4-2
+cloudron install --location headscale --image ghcr.io/jbjardine/headscale-cloudron-app:v0.29.4-3
 ```
+
+## Administration UI
+
+Users, Devices, Enrollment keys, Tailscale gateway and Settings share one navigation, layout and saved theme. Devices are grouped by user by default; search, user filtering, sorting and persistent group folding are available. Open a user to see their machines and recent active keys; key history stays on the dedicated Enrollment keys page. Complete secrets are never shown in list rows. Settings tests the server connection without asking for a browser-side API key.
+
+Tagged machines have their own group. In Headscale 0.29, assigning tags removes user ownership permanently; the tags dialog states this before saving.
 
 ## Add a machine
 
-Open **Enrollment keys**, select or create a Headscale user, then choose a registration type. Copy the complete key from the creation dialog and run its connection command on the machine. Keys created in the upstream **User View** also open this dialog.
+Open **Enrollment keys**, select or create a Headscale user, then choose a registration type. Copy the complete key from the creation dialog and run its connection command on the machine. The **Users** page links directly to enrollment for the selected user.
 
 Headscale returns the full key **only when it is created**. The key list contains metadata and a public identifier, so an old key's secret cannot be recovered. Create a replacement and expire the old key if its secret was lost.
 
 | Registration type | Default enrollment period | Behavior |
 | --- | --- | --- |
-| One machine | 7 days | One registration; machine remains registered |
-| Temporary cloud environments | 90 days | Reusable; offline ephemeral machines are cleaned up by Headscale |
-| Several permanent machines | 90 days | Reusable; registered machines persist |
+| Single use | 7 days | One registration; machine remains registered |
+| Temporary machines | 90 days | Reusable; offline ephemeral machines are cleaned up by Headscale |
+| Reusable | 90 days | Reusable; registered machines persist |
 
 Enrollment key expiration prevents new registrations. It does not disconnect registered machines; node expiration is a separate Headscale setting. **Expire** works with the Headscale 0.29 API and does not delete machines.
 

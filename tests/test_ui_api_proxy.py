@@ -4,6 +4,7 @@ import json
 import tempfile
 import threading
 import unittest
+from unittest.mock import mock_open, patch
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -107,6 +108,17 @@ class ProxyTests(unittest.TestCase):
     def test_native_expire_by_id(self):
         self.assertEqual(self.request("/api/v1/preauthkey/expire", {"id": "8"})[0], 200)
         self.assertEqual(Upstream.mutations, [{"id": "8"}])
+
+    def test_package_information_does_not_expose_credentials(self):
+        manifest = json.dumps({"version": "0.29.4-3", "secret": "not-for-the-browser"})
+        with patch("builtins.open", mock_open(read_data=manifest)), patch.dict(proxy.os.environ, {
+            "HEADSCALE_VERSION": "0.29.4", "HEADSCALE_UI_VERSION": "2026.03.17", "OTHER_SECRET": "not-for-the-browser",
+        }):
+            status, data, headers = self.request("/api/v1/package/info")
+        self.assertEqual(status, 200)
+        self.assertEqual(data, {"version": "0.29.4-3", "headscaleVersion": "0.29.4", "upstreamUiVersion": "2026.03.17"})
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        self.assertEqual(self.request("/api/v1/package/info", {}, method="POST")[0], 405)
 
     def test_unknown_or_wrong_user_key_is_not_expired(self):
         for payload in [{"user": "2", "key": "public-prefix-7"}, {"user": "1", "key": "unknown"}]:

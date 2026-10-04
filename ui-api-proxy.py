@@ -52,6 +52,16 @@ def read_api_key():
         return key_file.read().strip()
 
 
+def package_info():
+    try:
+        with open("/app/code/CloudronManifest.json", encoding="utf-8") as manifest_file:
+            version = json.load(manifest_file).get("version", "unknown")
+    except (OSError, ValueError):
+        version = "unknown"
+    return {"version": version, "headscaleVersion": os.environ.get("HEADSCALE_VERSION", "unknown"),
+            "upstreamUiVersion": os.environ.get("HEADSCALE_UI_VERSION", "unknown")}
+
+
 def server_api(method, path, payload=None):
     request = urllib.request.Request(HEADSCALE_API_URL + path,
         data=json.dumps(payload).encode() if payload is not None else None,
@@ -195,6 +205,13 @@ class HeadscaleUiProxyHandler(BaseHTTPRequestHandler):
 
         if request_path.startswith("/api/v1/apikey") and self.command not in ("GET", "HEAD", "OPTIONS"):
             self.send_text_response(403, "Headscale API key management is disabled in the browser UI")
+            return
+
+        if request_path == "/api/v1/package/info":
+            if self.command not in ("GET", "HEAD"):
+                self.send_text_response(405, "Use GET for package information")
+                return
+            self.send_json_response(200, package_info())
             return
 
         try:

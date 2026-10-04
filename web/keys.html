@@ -13,31 +13,25 @@
     <a href="/web/">Users</a><a href="/web/devices.html">Devices</a><a href="/web/keys.html" aria-current="page">Enrollment keys</a><a href="/web/gateway.html">Tailscale gateway</a><a href="/web/settings.html">Settings</a>
   </nav></aside>
   <main class="pkg-main">
-    <h1>Add a machine</h1><p class="pkg-muted">Create an enrollment key, then connect a Tailscale client to this Headscale server.</p>
+    <h1>Enrollment keys</h1>
     <div id="message" role="status" aria-live="polite" hidden></div>
-    <div class="pkg-layout">
       <section class="pkg-card" aria-labelledby="create-title">
-        <h2 id="create-title">Create an enrollment key</h2>
+        <h2 id="create-title">New key</h2>
         <form id="key-form">
           <label for="user">Headscale user</label><select id="user" required disabled><option value="">Loading users…</option></select>
           <details id="new-user"><summary>Create a user</summary><label for="username">Username</label><input id="username" autocomplete="off" maxlength="100"><button id="create-user" type="button" class="pkg-button">Create user</button></details>
-          <label for="purpose">What will use this key?</label><select id="purpose"><option value="machine">One machine</option><option value="cloud">Temporary cloud environments</option><option value="automation">Several permanent machines</option></select>
+          <label for="purpose">Key type</label><select id="purpose"><option value="machine">Single use</option><option value="cloud">Temporary machines</option><option value="automation">Reusable</option></select>
           <label for="lifetime">Enrollment period</label><select id="lifetime"><option value="24">24 hours</option><option value="168" selected>7 days</option><option value="720">30 days</option><option value="2160">90 days</option></select>
-          <p class="pkg-field-help">The key expires after this period. Machines already registered stay connected.</p>
+          <p class="pkg-field-help">Key expiry does not disconnect registered machines.</p>
           <details><summary>Advanced options</summary>
-            <label class="pkg-check"><input id="reusable" type="checkbox">Allow more than one registration</label>
-            <label class="pkg-check"><input id="ephemeral" type="checkbox">Remove temporary machines after they go offline</label>
+            <label class="pkg-check"><input id="reusable" type="checkbox">Reusable</label>
+            <label class="pkg-check"><input id="ephemeral" type="checkbox">Temporary machines</label>
             <label for="tags">Headscale tags (optional)</label><input id="tags" placeholder="tag:ci, tag:development"><p class="pkg-field-help">Tags must be allowed by your existing Headscale policy.</p>
           </details>
           <div class="pkg-actions"><button id="create-key" class="pkg-button pkg-primary" disabled>Create enrollment key</button></div>
         </form>
       </section>
-      <aside class="pkg-card"><h2>Three steps to connect</h2><ol><li>Choose the user and key type.</li><li>Copy the key when it is created.</li><li>Run the connection command on your machine.</li></ol>
-        <p class="pkg-note">Headscale keys are for clients configured with this server's login URL.</p>
-        <p class="pkg-muted">For a cloud platform that accepts only official Tailscale keys, use the optional <a href="/web/gateway.html">Tailscale gateway</a>.</p>
-      </aside>
-    </div>
-    <section class="pkg-card" aria-labelledby="list-title"><h2 id="list-title">Keys for this user</h2><p class="pkg-muted">Complete keys cannot be retrieved here. Only their registration settings and status are kept.</p>
+    <section class="pkg-card" aria-labelledby="list-title"><h2 id="list-title">Keys for this user</h2>
       <div id="key-list" aria-live="polite">Choose a user to view their keys.</div>
     </section>
   </main>

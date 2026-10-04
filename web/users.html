@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Users · Headscale</title><link rel="stylesheet" href="/web/package-ui.css">
+  <script src="/web/config.js"></script><script src="/web/package-ui.js" defer></script><script src="/web/users.js" defer></script>
+</head><body class="pkg-shell">
+  <aside class="pkg-sidebar"></aside><main class="pkg-main">
+    <h1>Users</h1>
+    <div id="message" role="status" aria-live="polite" hidden></div>
+    <div class="pkg-toolbar">
+      <div class="pkg-search"><label for="user-search">Find a user</label><input id="user-search" type="search" placeholder="Name or email" autocomplete="off"></div>
+      <div class="pkg-filter"><label for="user-sort">Sort by</label><select id="user-sort"><option value="name">Name</option><option value="id">ID</option><option value="created">Creation date</option></select></div>
+      <button id="new-user" class="pkg-button pkg-primary" type="button">New user</button><button id="refresh-users" class="pkg-button" type="button">Refresh</button>
+    </div>
+    <p id="user-count" class="pkg-field-help" aria-live="polite"></p>
+    <div id="users" aria-live="polite"><p class="pkg-empty">Loading users…</p></div>
+  </main>
+</body></html>
