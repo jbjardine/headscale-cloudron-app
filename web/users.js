@@ -30,12 +30,15 @@
       var content = ui.element("div", "pkg-entry-body"), facts = ui.element("dl", "pkg-facts");
       fact(facts, "Username", user.name || name);fact(facts, "Email", user.email || "Not set");fact(facts, "Created", ui.date(user.createdAt));content.appendChild(facts);
       var actions = ui.element("div", "pkg-actions");actions.append(link("View machines", "/web/devices.html?user=" + encodeURIComponent(id)), link("Create enrollment key", "/web/keys.html?user=" + encodeURIComponent(id)));
-      var rename = ui.element("button", "pkg-button", "Rename user");rename.type = "button";
-      rename.addEventListener("click", function () {
-        ui.formDialog("Rename " + name, "Machines and keys are kept.", [{name: "name", label: "Username", value: user.name || name, maxLength: 100}], "Save name", async function (value) {
-          await ui.api("/api/v1/user/" + encodeURIComponent(id) + "/rename/" + encodeURIComponent(value.name), {method: "POST"});await load();ui.message("User renamed.");
+      if (user.provider !== "oidc") {
+        var rename = ui.element("button", "pkg-button", "Rename user");rename.type = "button";
+        rename.addEventListener("click", function () {
+          ui.formDialog("Rename " + name, "Machines and keys are kept.", [{name: "name", label: "Username", value: user.name || name, maxLength: 100}], "Save name", async function (value) {
+            await ui.api("/api/v1/user/" + encodeURIComponent(id) + "/rename/" + encodeURIComponent(value.name), {method: "POST"});await load();ui.message("User renamed.");
+          });
         });
-      });actions.appendChild(rename);
+        actions.appendChild(rename);
+      }
       var remove = ui.element("button", "pkg-button pkg-danger", "Delete user");remove.type = "button";remove.disabled = devices.length > 0;
       if (devices.length) remove.title = "Remove this user's machines before deleting the user.";
       remove.addEventListener("click", function () {

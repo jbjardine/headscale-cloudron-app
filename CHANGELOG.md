@@ -8,6 +8,7 @@
 - Restore default device grouping by user, with search, filters, sorting and remembered collapsible groups.
 - Preserve user/device creation, rename, tags, routes, expiration and deletion; keep API credentials server-side.
 - Shorten interface copy and show tagged machines separately, with the ownership change explained before assigning tags.
+- Resolve renamed device owners from current users, hide unsupported OIDC actions, and retain legacy tags/routes and cleared filters.
 - Check all five views and navigation at desktop, reported viewport and mobile sizes.
 
 ## 0.29.4-2 - 2026-10-04

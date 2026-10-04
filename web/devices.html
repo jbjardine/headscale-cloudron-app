@@ -16,7 +16,7 @@
     </div>
     <p id="device-count" class="pkg-field-help" aria-live="polite"></p><div id="devices" aria-live="polite"><p class="pkg-empty">Loading machines…</p></div>
     <details class="pkg-card"><summary>Register a machine with a registration key</summary>
-      <p class="pkg-field-help">For a client connecting without an enrollment key.</p>
+      <p class="pkg-field-help">Local accounts only. OIDC accounts use their identity provider.</p>
       <form id="register-device"><label for="register-user">Headscale user</label><select id="register-user" required></select>
         <label for="registration-key">Registration key</label><input id="registration-key" required autocomplete="off">
         <div class="pkg-actions"><button id="register-submit" class="pkg-button" type="submit">Register machine</button></div>

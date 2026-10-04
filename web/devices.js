@@ -5,7 +5,13 @@
   var grouped = ui.stored("headscale-package-group-devices", "true") !== "false", collapsed;
   try { collapsed = new Set(JSON.parse(ui.stored("headscale-package-collapsed-users", "[]"))); } catch (_) { collapsed = new Set(); }
   function userId(node) { return nodeTags(node).length ? "tagged" : String((node.user || {}).id || "none"); }
-  function userName(node) { return nodeTags(node).length ? "Tagged machines" : (node.user && node.user.id ? ui.userName(node.user) : "Unassigned machines"); }
+  function userName(node) {
+    if (nodeTags(node).length) return "Tagged machines";
+    if (!node.user || !node.user.id) return "Unassigned machines";
+    var current = users.find(function (user) { return String(user.id) === String(node.user.id); });
+    return ui.userName(current || node.user);
+  }
+  function manualUser(user) { return user.provider !== "oidc" && Boolean(user.name); }
   function nodeName(node) { return node.givenName || node.name || "Machine " + node.id; }
   function nodeTags(node) { return Array.from(new Set([].concat(node.tags || [], node.forcedTags || [], node.validTags || []))); }
   function fact(list, label, value) { list.append(ui.element("dt", "", label), ui.element("dd", "", value)); }
@@ -81,10 +87,13 @@
       var data = await Promise.all([ui.api("/api/v1/node"), ui.api("/api/v1/user")]);if (version !== loading) return;nodes = data[0].nodes || [];users = data[1].users || [];
       var previous = $("device-user").value || new URLSearchParams(location.search).get("user") || "";
       $("device-user").replaceChildren(new Option("All users", ""));$("register-user").replaceChildren();
-      users.forEach(function (user) { $("device-user").appendChild(new Option(ui.userName(user), String(user.id)));$("register-user").appendChild(new Option(ui.userName(user), String(user.id))); });
+      users.forEach(function (user) { $("device-user").appendChild(new Option(ui.userName(user), String(user.id))); });
+      var manualUsers = users.filter(manualUser);
+      manualUsers.forEach(function (user) { $("register-user").appendChild(new Option(ui.userName(user), String(user.id))); });
+      if (!manualUsers.length) $("register-user").appendChild(new Option("No local users", ""));
       if (nodes.some(function (node) { return userId(node) === "tagged"; })) $("device-user").appendChild(new Option("Tagged machines", "tagged"));
       if (nodes.some(function (node) { return userId(node) === "none"; })) $("device-user").appendChild(new Option("Unassigned machines", "none"));
-      $("device-user").value = previous;$("register-submit").disabled = !users.length;render();
+      $("device-user").value = previous;$("register-submit").disabled = !manualUsers.length;render();
     } catch (error) { if (version === loading) { ui.message(error.message, true);$("devices").replaceChildren(ui.element("p", "pkg-empty", "Machines could not be loaded. Try Refresh.")); } }
     finally { if (version === loading) $("refresh-devices").disabled = false; }
   }
@@ -99,10 +108,10 @@
     event.preventDefault();$("register-submit").disabled = true;
     try {
       var user = users.find(function (user) { return String(user.id) === $("register-user").value; });
-      if (!user || !user.name) throw new Error("Choose a user with a username.");
+      if (!user || !manualUser(user)) throw new Error("Choose a local user.");
       await ui.api("/api/v1/node/register?user=" + encodeURIComponent(user.name) + "&key=" + encodeURIComponent($("registration-key").value.trim()), {method: "POST"});$("registration-key").value = "";await load();ui.message("Machine registered.");
     }
     catch (error) { ui.message(error.message, true); }
-    finally { $("register-submit").disabled = !users.length; }
+    finally { $("register-submit").disabled = !users.some(manualUser); }
   });load();
 })();
