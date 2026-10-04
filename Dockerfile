@@ -5,10 +5,9 @@ COPY gateway/go.mod gateway/go.sum ./
 RUN --mount=type=secret,id=proxy_ca --mount=type=cache,target=/go/pkg/mod \
     if [ -f /run/secrets/proxy_ca ]; then export SSL_CERT_FILE=/run/secrets/proxy_ca; fi; \
     go mod download
-COPY gateway/ ./
-RUN --mount=type=secret,id=proxy_ca --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+RUN --mount=type=bind,source=gateway,target=/src,readonly --mount=type=secret,id=proxy_ca --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
     if [ -f /run/secrets/proxy_ca ]; then export SSL_CERT_FILE=/run/secrets/proxy_ca; fi; \
-    go test ./... && CGO_ENABLED=0 go build -trimpath -o /out/headscale-gateway .
+    CGO_ENABLED=0 go build -trimpath -o /out/headscale-gateway .
 
 FROM alpine:3.24
 

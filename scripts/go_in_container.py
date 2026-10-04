@@ -14,7 +14,7 @@ def main():
         raise SystemExit("A fixed Go builder version is required")
     cwd = Path.cwd().resolve().relative_to(root)
     cache = Path(os.environ.get("RUNNER_TEMP", "/tmp")) / "headscale-isolated-go"
-    for name in ("modules", "build"):
+    for name in ("modules", "sumdb", "build"):
         (cache / name).mkdir(parents=True, exist_ok=True)
     docker = ["docker"]
     if os.environ.get("HEADSCALE_TEST_DOCKER_HOST"):
@@ -35,6 +35,7 @@ def main():
     command = docker + ["run", "--rm", "--user", f"{os.getuid()}:{os.getgid()}", "--network=host", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--tmpfs", "/tmp:rw,exec,nosuid",
                        "--mount", f"type=bind,src={root},dst=/src,readonly",
                        "--mount", f"type=bind,src={cache / 'modules'},dst=/go/pkg/mod",
+                       "--mount", f"type=bind,src={cache / 'sumdb'},dst=/go/pkg/sumdb",
                        "--mount", f"type=bind,src={cache / 'build'},dst=/go/build-cache",
                        "-w", "/src/" + cwd.as_posix(), "-e", "GOCACHE=/go/build-cache", "-e", "GOFLAGS=-p=4", "-e", "TS_DISABLE_LOGTAIL=true"]
     # Only public network settings and local fixture coordinates cross this

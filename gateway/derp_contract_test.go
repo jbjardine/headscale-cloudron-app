@@ -8,13 +8,13 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"tailscale.com/derp"
 	"tailscale.com/derp/derphttp"
 	"tailscale.com/ipn"
-	"tailscale.com/ipn/store/mem"
 	"tailscale.com/net/netmon"
 	"tailscale.com/tsnet"
 	"tailscale.com/types/key"
@@ -22,7 +22,7 @@ import (
 )
 
 // Real SDK enrollment and DERP transport go through the packaged Caddy proxy.
-// All keys belong to disposable local fixtures and stay in memory.
+// All keys belong to disposable local fixtures with private temporary state.
 func TestPackagedEmbeddedDERP(t *testing.T) {
 	if os.Getenv("HEADSCALE_TEST_DERP") != "1" {
 		t.Skip("requires the disposable DERP-enabled packaged fixture")
@@ -36,7 +36,7 @@ func TestPackagedEmbeddedDERP(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	enroll := func(index int) key.NodePrivate {
-		payload, _ := json.Marshal(map[string]any{"user": os.Getenv("HEADSCALE_TEST_USER"), "expiration": time.Now().Add(time.Hour).UTC().Format(time.RFC3339), "ephemeral": true})
+		payload, _ := json.Marshal(map[string]any{"user": os.Getenv("HEADSCALE_TEST_USER"), "expiration": time.Now().Add(time.Hour).UTC().Format(time.RFC3339), "ephemeral": false})
 		req, _ := http.NewRequestWithContext(ctx, "POST", base+"/web/api/v1/preauthkey", bytes.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-Headscale-UI", "1")
@@ -54,13 +54,14 @@ func TestPackagedEmbeddedDERP(t *testing.T) {
 		if err := json.NewDecoder(response.Body).Decode(&created); err != nil || created.PreAuthKey.Key == "" {
 			t.Fatal("missing local enrollment key")
 		}
-		store := new(mem.Store)
-		server := &tsnet.Server{Dir: t.TempDir(), Store: store, ControlURL: base, Hostname: fmt.Sprintf("derp-fixture-%d", index), AuthKey: created.PreAuthKey.Key, Ephemeral: true, UserLogf: logger.Discard, Logf: logger.Discard}
+		directory := t.TempDir()
+		server := &tsnet.Server{Dir: directory, ControlURL: base, Hostname: fmt.Sprintf("derp-fixture-%d", index), AuthKey: created.PreAuthKey.Key, UserLogf: logger.Discard, Logf: logger.Discard}
 		defer server.Close()
-		if _, err := server.Up(ctx); err != nil {
+		state, err := server.Up(ctx)
+		if err != nil {
 			t.Fatal("DERP fixture node enrollment failed")
 		}
-		encoded, err := store.ExportToJSON()
+		encoded, err := os.ReadFile(filepath.Join(directory, "tailscaled.state"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -70,7 +71,7 @@ func TestPackagedEmbeddedDERP(t *testing.T) {
 		}
 		for _, content := range profiles {
 			var prefs ipn.Prefs
-			if json.Unmarshal(content, &prefs) == nil && prefs.Persist != nil && !prefs.Persist.PrivateNodeKey.IsZero() {
+			if json.Unmarshal(content, &prefs) == nil && prefs.Persist != nil && state.Self != nil && prefs.Persist.NodeID == state.Self.ID && !prefs.Persist.PrivateNodeKey.IsZero() {
 				return prefs.Persist.PrivateNodeKey
 			}
 		}
@@ -95,7 +96,7 @@ func TestPackagedEmbeddedDERP(t *testing.T) {
 		}
 		message, err := c.Recv()
 		if _, ok := message.(derp.ServerInfoMessage); err != nil || !ok {
-			t.Fatal("embedded DERP rejected a registered node")
+			t.Fatalf("registered DERP handshake: message %T, error %v", message, err)
 		}
 	}
 	check := func(sender, receiver *derphttp.Client, source, destination key.NodePublic) {

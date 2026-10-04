@@ -14,6 +14,7 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+import zlib
 
 
 def main():
@@ -57,7 +58,11 @@ def main():
         raise RuntimeError("The packaged app did not become ready")
     def check_stun():
         transaction = os.urandom(12)
-        request = struct.pack("!HHI", 1, 0, 0x2112A442) + transaction
+        # The Tailscale STUN server requires SOFTWARE and FINGERPRINT.
+        software = b"tailnode"
+        attributes = struct.pack("!HH", 0x8022, len(software)) + software
+        request = struct.pack("!HHI", 1, len(attributes) + 8, 0x2112A442) + transaction + attributes
+        request += struct.pack("!HHI", 0x8028, 4, zlib.crc32(request) ^ 0x5354554E)
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as connection:
             connection.settimeout(3)
             connection.sendto(request, ("127.0.0.1", stun_port))
@@ -70,17 +75,18 @@ def main():
             attribute, size = struct.unpack("!HH", response[offset:offset + 4])
             value = response[offset + 4:offset + 4 + size]
             if attribute == 0x0020:
-                assert size == 8 and value[1] == 1, "Invalid STUN IPv4 mapped address"
-                assert struct.unpack("!H", value[2:4])[0] ^ 0x2112 > 0, "Invalid STUN mapped port"
-                address = bytes(a ^ b for a, b in zip(value[4:8], struct.pack("!I", cookie)))
-                assert not ipaddress.IPv4Address(address).is_unspecified, "Invalid STUN mapped IP"
+                assert (size, value[1]) in ((8, 1), (20, 2)), "Invalid STUN mapped address"
+                assert (struct.unpack("!H", value[2:4])[0] ^ 0x2112) > 0, "Invalid STUN mapped port"
+                mask = struct.pack("!I", cookie) + transaction
+                address = bytes(a ^ b for a, b in zip(value[4:], mask))
+                assert not ipaddress.ip_address(address).is_unspecified, "Invalid STUN mapped IP"
                 return
             offset += 4 + (size + 3) // 4 * 4
         raise AssertionError("STUN did not report the XOR mapped address")
     with tempfile.TemporaryDirectory(prefix="headscale-smoke-") as directory:
         data = Path(directory) / "data"
         data.mkdir()
-        arguments = ["run", "-d", "--name", name, "--cap-drop=ALL", "--cap-add=CHOWN", "--cap-add=SETUID", "--cap-add=SETGID", "--cap-add=DAC_OVERRIDE",
+        arguments = ["run", "-d", "--name", name, "--cap-drop=ALL", "--cap-add=CHOWN", "--cap-add=SETUID", "--cap-add=SETGID", "--cap-add=DAC_OVERRIDE", "--cap-add=KILL",
                      "-p", f"127.0.0.1:{port}:8080", "-e", "CLOUDRON_APP_ORIGIN=" + base,
                      "--mount", f"type=bind,src={data},dst=/app/data"]
         if args.check_derp:
@@ -152,6 +158,13 @@ def main():
                 wait_ready()
                 print("Embedded DERP passed: bidirectional relay, registered-client verification, unknown-client rejection, public STUN UDP response/advertisement, stable identity after restart, disable/restart")
             print("Packaged API smoke passed: creation, one-time secret, user filtering, both expiry APIs, CSRF, default-off gateway, restart persistence; no NET_ADMIN capability")
+        except Exception:
+            evidence = os.environ.get("HEADSCALE_QA_DIR")
+            if evidence:
+                Path(evidence).mkdir(parents=True, exist_ok=True)
+                logs = subprocess.run(docker + ["logs", name], capture_output=True, text=True, check=False)
+                (Path(evidence) / "packaged-fixture.log").write_text(logs.stdout + logs.stderr)
+            raise
         finally:
             subprocess.run(docker + ["exec", name, "chown", "-R", f"{os.getuid()}:{os.getgid()}", "/app/data"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
             subprocess.run(docker + ["rm", "-f", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
