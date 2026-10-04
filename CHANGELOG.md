@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.29.4-3 - 2026-10-04
+
+- Use one responsive navigation and theme across Users, Devices, Enrollment keys, Tailscale gateway and Settings.
+- Replace the overlapping links injected into upstream navigation with a shared menu.
+- Keep user key summaries compact with IDs, states and expiry dates, and move full history to Enrollment keys.
+- Restore default device grouping by user, with search, filters, sorting and remembered collapsible groups.
+- Preserve user/device creation, rename, tags, routes, expiration and deletion; keep API credentials server-side.
+- Shorten interface copy and show tagged machines separately, with the ownership change explained before assigning tags.
+- Resolve renamed device owners from current users, hide unsupported OIDC actions, and retain legacy tags/routes and cleared filters.
+- Check all five views and navigation at desktop, reported viewport and mobile sizes.
+
 ## 0.29.4-2 - 2026-10-04
 
 - Show and copy complete enrollment keys once, including keys created in the upstream UI.

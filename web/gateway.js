@@ -8,8 +8,8 @@
     current = data;
     var state = data.status || {};
     $("connection-status").replaceChildren(ui.element("span", "pkg-badge" + (state.state === "running" ? " pkg-badge-active" : ""), state.state || "Unknown"), ui.element("span", "", state.message || ""));
-    $("gateway-addresses").textContent = (state.officialIps || []).length ? "Official Tailscale: " + state.officialIps.join(", ") + " · Headscale: " + (state.headscaleIps || []).join(", ") : "The gateway address appears after both connections are established.";
-    $("key-state").textContent = data.hasOfficialKey ? "A key is saved. Leave this field empty to keep it. Changing a key does not replace an already registered gateway identity." : "No official Tailscale key saved yet.";
+    $("gateway-addresses").textContent = (state.officialIps || []).length ? "Tailscale: " + state.officialIps.join(", ") + " · Headscale: " + (state.headscaleIps || []).join(", ") : "No gateway address.";
+    $("key-state").textContent = data.hasOfficialKey ? "Key saved. Leave blank to keep it." : "No key saved.";
     var ports = data.settings.rules.map(function (rule) { return "tcp:" + rule.listenPort; });
     $("grant-example").textContent = JSON.stringify({ grants: [{ src: ["tag:cloud-dev"], dst: ["tag:headscale-gateway"], ip: ports.length ? ports : ["tcp:1445"] }] }, null, 2);
   }
@@ -66,7 +66,7 @@
         return { nodeId: machine[0], targetIp: machine[1], targetPort: Number(row.querySelector(".rule-target-port").value), listenPort: Number(row.querySelector(".rule-listen-port").value) };
       })
     };
-    try { var data = await ui.api("/api/v1/package/gateway", { method: "PUT", body: settings });$("official-key").value = "";status(data);message(settings.enabled ? "Settings saved. The gateway is connecting." : "Gateway disabled. No services are forwarded."); }
+    try { var data = await ui.api("/api/v1/package/gateway", { method: "PUT", body: settings });$("official-key").value = "";status(data);message(settings.enabled ? "Saved. Connecting…" : "Saved. Gateway disabled."); }
     catch (error) { message(error.message, true); }
     finally { $("save").disabled = false; }
   });

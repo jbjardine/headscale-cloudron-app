@@ -36,39 +36,10 @@
       if (version !== loadingVersion) return;
       var keys = data.preAuthKeys || [];
       if (!keys.length) { $("key-list").textContent = "No keys yet. Create one above to connect your first machine."; return; }
-      var wrap = ui.element("div", "pkg-table-wrap");
-      var table = ui.element("table", "pkg-table");
-      var head = ui.element("thead");
-      var header = ui.element("tr");
-      ["Key", "Registration type", "Enrollment expiry", "Status", "Action"].forEach(function (text) { var th = ui.element("th", "", text); th.scope = "col"; header.appendChild(th); });
-      head.appendChild(header);table.appendChild(head);
-      var body = ui.element("tbody");
-      keys.slice().reverse().forEach(function (key) {
-        var expired = Boolean(key.expiration) && new Date(key.expiration).getTime() <= Date.now();
-        var used = key.used && !key.reusable;
-        var row = ui.element("tr");
-        row.appendChild(ui.element("td", "", "#" + key.id));
-        var type = ui.element("td", "", key.reusable ? "Reusable" : "One registration");
-        if (key.ephemeral) type.appendChild(ui.element("span", "pkg-badge", "Temporary machines"));
-        row.appendChild(type);
-        row.appendChild(ui.element("td", "", key.expiration ? new Date(key.expiration).toLocaleString() : "No expiry"));
-        var status = ui.element("td");
-        status.appendChild(ui.element("span", "pkg-badge" + (!expired && !used ? " pkg-badge-active" : ""), expired ? "Expired" : used ? "Used" : "Active"));
-        row.appendChild(status);
-        var actions = ui.element("td");
-        if (!expired && !used) {
-          var button = ui.element("button", "pkg-button", "Expire");button.type = "button";
-          button.setAttribute("aria-label", "Expire enrollment key " + key.id);
-          button.addEventListener("click", async function () {
-            button.disabled = true;
-            try { await ui.api("/api/v1/preauthkey/expire", { method: "POST", body: { id: String(key.id) } });await loadKeys();message("Key expired. Existing machines remain registered."); }
-            catch (error) { message(error.message, true);button.disabled = false; }
-          });
-          actions.appendChild(button);
-        } else { actions.textContent = "—"; }
-        row.appendChild(actions);body.appendChild(row);
-      });
-      table.appendChild(body);wrap.appendChild(table);$("key-list").replaceChildren(wrap);
+      $("key-list").replaceChildren(ui.keyTable(keys, async function (key) {
+        try { await ui.api("/api/v1/preauthkey/expire", { method: "POST", body: { id: String(key.id) } });await loadKeys();message("Key expired. Existing machines remain registered."); }
+        catch (error) { message(error.message, true); }
+      }));
     } catch (error) { if (version === loadingVersion) { $("key-list").textContent = "Keys could not be loaded.";message(error.message, true); } }
   }
 

@@ -2,47 +2,33 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Tailscale gateway · Headscale</title>
-  <link rel="stylesheet" href="/web/package-ui.css">
+  <title>Tailscale gateway · Headscale</title><link rel="stylesheet" href="/web/package-ui.css">
   <script src="/web/config.js"></script><script src="/web/package-ui.js" defer></script><script src="/web/gateway.js" defer></script>
 </head>
 <body class="pkg-shell">
-  <aside class="pkg-sidebar"><a class="pkg-brand" href="/web/">Headscale</a><nav aria-label="Main navigation">
-    <a href="/web/">Users</a><a href="/web/devices.html">Devices</a><a href="/web/keys.html">Enrollment keys</a><a href="/web/gateway.html" aria-current="page">Tailscale gateway</a><a href="/web/settings.html">Settings</a>
-  </nav></aside>
+  <aside class="pkg-sidebar"></aside>
   <main class="pkg-main">
-    <h1>Tailscale gateway</h1><p class="pkg-muted">Let selected Tailscale clients reach chosen services on your Headscale machines.</p>
+    <h1>Tailscale gateway</h1>
     <div id="message" role="status" aria-live="polite" hidden></div>
-    <section class="pkg-card" aria-labelledby="status-title"><h2 id="status-title">Connection status</h2><div id="connection-status" class="pkg-status" aria-live="polite">Loading…</div><p id="gateway-addresses" class="pkg-field-help"></p></section>
+    <section class="pkg-card" aria-labelledby="status-title"><h2 id="status-title">Status</h2><div id="connection-status" class="pkg-status" aria-live="polite">Loading…</div><p id="gateway-addresses" class="pkg-field-help"></p></section>
     <form id="gateway-form">
-      <div class="pkg-layout">
-        <section class="pkg-card"><h2>1. Connect the gateway</h2>
-          <label class="pkg-check"><input id="enabled" type="checkbox">Enable this optional gateway</label>
-          <p class="pkg-field-help">Disabling closes the forwarded services. Saved settings and gateway identities are kept for the next connection.</p>
-          <label for="headscale-user">Headscale user for this gateway</label><select id="headscale-user"><option value="">Choose a user</option></select>
-          <label for="official-key">Official Tailscale auth key</label><input id="official-key" type="password" autocomplete="new-password" placeholder="tskey-auth-…"><p id="key-state" class="pkg-field-help">Loading key status…</p>
-          <p class="pkg-field-help">Create a key in your official Tailscale account for a permanent gateway machine. Headscale enrollment is handled automatically. Stored keys are never returned to the browser.</p>
-        </section>
-        <aside class="pkg-card"><h2>How it works</h2><p>Your cloud environment joins official Tailscale. This gateway connects the services below through a separate Headscale identity.</p>
-          <p class="pkg-note">Only the TCP services you choose are forwarded. Headscale and Tailscale access policies apply alongside these settings.</p>
-          <p class="pkg-muted">Use a dedicated Headscale user and allow it to reach only the destination machines in your Headscale policy.</p>
-        </aside>
-      </div>
-      <section class="pkg-card"><h2>2. Choose accessible services</h2><p class="pkg-muted">Each service has a port on the gateway and a destination on a registered Headscale machine.</p>
-        <div id="rules"></div><button id="add-rule" type="button" class="pkg-button">Add a TCP service</button><p id="no-machines" class="pkg-field-help" hidden>Register a machine in Headscale before adding a service.</p>
+      <section class="pkg-card"><h2>Connection</h2>
+        <label class="pkg-check"><input id="enabled" type="checkbox">Enable gateway</label>
+        <div class="pkg-inline-fields">
+          <div><label for="headscale-user">Headscale user</label><select id="headscale-user"><option value="">Choose a user</option></select></div>
+          <div><label for="official-key">Tailscale auth key</label><input id="official-key" type="password" autocomplete="new-password" placeholder="tskey-auth-…"><p id="key-state" class="pkg-field-help">Loading…</p></div>
+        </div>
       </section>
-      <section class="pkg-card"><h2>3. Set access limits</h2>
-        <label for="source-mode">Who may connect?</label><select id="source-mode"><option value="restricted">Only these Tailscale addresses</option><option value="tailnet">Any client allowed by my Tailscale policy</option></select>
-        <div id="source-fields"><label for="allowed-sources">Allowed source IP addresses or CIDR networks</label><textarea id="allowed-sources" rows="3" placeholder="100.101.102.103/32"></textarea><p class="pkg-field-help">One per line. An empty list blocks all service connections. Use the cloud machine's Tailscale address, or a network you explicitly trust.</p></div>
-        <div class="pkg-inline-fields"><div><label for="max-connections">Maximum simultaneous connections</label><input id="max-connections" type="number" min="1" max="512" value="16" required></div><div><label for="max-mbps">Total bandwidth limit (Mbps)</label><input id="max-mbps" type="number" min="0" max="8000" step="0.1" value="0" required><p class="pkg-field-help">Shared by all services and both directions. 0 means unlimited.</p></div></div>
-        <label for="idle-timeout">Close idle connections after (seconds)</label><input id="idle-timeout" type="number" min="30" max="86400" value="900" required>
-        <div class="pkg-actions"><button id="save" class="pkg-button pkg-primary" disabled>Save gateway settings</button></div>
+      <section class="pkg-card"><h2>Services</h2><div id="rules"></div><button id="add-rule" type="button" class="pkg-button">Add a TCP service</button><p id="no-machines" class="pkg-field-help" hidden>No registered machines.</p></section>
+      <section class="pkg-card"><h2>Access limits</h2>
+        <label for="source-mode">Allowed clients</label><select id="source-mode"><option value="restricted">IP allowlist</option><option value="tailnet">Tailscale policy</option></select>
+        <div id="source-fields"><label for="allowed-sources">Source IPs or CIDRs</label><textarea id="allowed-sources" rows="3" placeholder="100.101.102.103/32"></textarea><p class="pkg-field-help">One per line. An empty list blocks access.</p></div>
+        <div class="pkg-inline-fields"><div><label for="max-connections">Maximum connections</label><input id="max-connections" type="number" min="1" max="512" value="16" required></div><div><label for="max-mbps">Bandwidth (Mbps)</label><input id="max-mbps" type="number" min="0" max="8000" step="0.1" value="0" required><p class="pkg-field-help">Shared limit. 0 = unlimited.</p></div><div><label for="idle-timeout">Idle timeout (seconds)</label><input id="idle-timeout" type="number" min="30" max="86400" value="900" required></div></div>
+        <div class="pkg-actions"><button id="save" class="pkg-button pkg-primary" disabled>Save</button></div>
       </section>
     </form>
-    <section class="pkg-card"><h2>4. Connect your cloud environment</h2><ol><li>Save the gateway settings and wait for its Tailscale address above.</li><li>Create a separate reusable official Tailscale auth key for your cloud environments, then add it to their VPN settings.</li><li>Allow the gateway's IPv4 address in the cloud environment's network settings if its policy requires it.</li><li>Connect to the gateway address and the service port chosen above.</li></ol>
-      <p class="pkg-muted">A Headscale key cannot be used in a cloud VPN field that only accepts official Tailscale keys. Enrollment key expiry prevents new registrations; existing machine sessions follow their own expiry settings.</p>
-      <details><summary>Example Tailscale grant</summary><p class="pkg-field-help">Merge this fragment into your existing Tailscale policy, with tags owned and assigned in your account. It does not replace your policy.</p><pre id="grant-example" class="pkg-command"></pre></details>
-      <p class="pkg-field-help">This is a TCP service gateway. It does not advertise subnet routes, act as an exit node, or expose the app's administration interface.</p>
+    <section class="pkg-card"><h2>Cloud clients</h2><p class="pkg-field-help">VPN: a separate reusable Tailscale key. Destination: gateway IP and service port.</p>
+      <details><summary>Tailscale policy example</summary><p class="pkg-field-help">Add to your existing policy. Adjust the tags.</p><pre id="grant-example" class="pkg-command"></pre></details>
     </section>
   </main>
 </body>

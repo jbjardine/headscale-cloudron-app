@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en"><head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Devices · Headscale</title><link rel="stylesheet" href="/web/package-ui.css">
+  <script src="/web/config.js"></script><script src="/web/package-ui.js" defer></script><script src="/web/devices.js" defer></script>
+</head><body class="pkg-shell">
+  <aside class="pkg-sidebar"></aside><main class="pkg-main">
+    <h1>Devices</h1>
+    <div id="message" role="status" aria-live="polite" hidden></div>
+    <div class="pkg-toolbar">
+      <div class="pkg-search"><label for="device-search">Find a machine</label><input id="device-search" type="search" placeholder="Name, user or IP address" autocomplete="off"></div>
+      <div class="pkg-filter"><label for="device-user">User</label><select id="device-user"><option value="">All users</option></select></div>
+      <div class="pkg-filter"><label for="device-sort">Sort by</label><select id="device-sort"><option value="name">Name</option><option value="id">ID</option><option value="lastSeen">Last seen</option></select></div>
+      <button id="group-users" class="pkg-button" type="button" aria-pressed="true">Group by user</button>
+      <a class="pkg-button pkg-primary" href="/web/keys.html">Add a machine</a><button id="refresh-devices" class="pkg-button" type="button">Refresh</button>
+    </div>
+    <p id="device-count" class="pkg-field-help" aria-live="polite"></p><div id="devices" aria-live="polite"><p class="pkg-empty">Loading machines…</p></div>
+    <details class="pkg-card"><summary>Register a machine with a registration key</summary>
+      <p class="pkg-field-help">Local accounts only. OIDC accounts use their identity provider.</p>
+      <form id="register-device"><label for="register-user">Headscale user</label><select id="register-user" required></select>
+        <label for="registration-key">Registration key</label><input id="registration-key" required autocomplete="off">
+        <div class="pkg-actions"><button id="register-submit" class="pkg-button" type="submit">Register machine</button></div>
+      </form>
+    </details>
+  </main>
+</body></html>
