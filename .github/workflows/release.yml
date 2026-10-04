@@ -39,6 +39,9 @@ jobs:
             --exclude='./.workflow' \
             --exclude='dist' \
             --exclude='./dist' \
+            --exclude='node_modules' \
+            --exclude='*/node_modules' \
+            --exclude='__pycache__' \
             -czf "$RUNNER_TEMP/$artifact" .
 
           mkdir -p dist

@@ -5,7 +5,7 @@
   "description": "Headscale is an open source, self-hosted implementation of the Tailscale control server. This Cloudron package runs Headscale with SQLite storage, an optional embedded DERP STUN UDP port, and a bundled web UI protected by Cloudron proxy auth.",
   "tagline": "Self-hosted Tailscale-compatible coordination server",
   "manifestVersion": 2,
-  "version": "0.29.4-1",
+  "version": "0.29.4-2",
   "upstreamVersion": "0.29.4",
   "website": "https://headscale.net/",
   "contactEmail": "jbjardine@users.noreply.github.com",
@@ -25,7 +25,7 @@
   "minBoxVersion": "9.1.0",
   "packagerName": "jbjardine",
   "packagerUrl": "https://github.com/jbjardine/headscale-cloudron-app",
-  "postInstallMessage": "Headscale is ready. Open the Configure link to access the bundled web UI at /web. Create a Headscale user, generate a pre-auth key, then connect Tailscale clients with this app URL as the login server. The DERP STUN UDP port is optional and DERP is disabled by default in the generated config.",
+  "postInstallMessage": "Headscale is ready. Open Configure for the Cloudron-protected UI. Use Enrollment keys to add a machine and copy its key immediately. The optional Tailscale gateway is disabled until configured; choose services and limits before enabling it. DERP is optional and disabled by default.",
   "addons": {
     "localstorage": {
       "sqlite": {
@@ -38,9 +38,7 @@
       "path": "/web"
     }
   },
-  "capabilities": [
-    "net_admin"
-  ],
+  "capabilities": [],
   "udpPorts": {
     "DERP_PORT": {
       "title": "DERP STUN Port",

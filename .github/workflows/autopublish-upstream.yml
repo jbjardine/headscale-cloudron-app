@@ -27,6 +27,12 @@ jobs:
           ref: main
           fetch-depth: 0
 
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "stable"
+          cache-dependency-path: gateway/go.sum
+
       - name: Check upstream versions
         id: bump
         env:
@@ -36,30 +42,26 @@ jobs:
       - name: Verify generated update diff
         if: steps.bump.outputs.changed == 'true'
         run: |
-          if git diff --quiet -- Dockerfile CloudronManifest.json CloudronVersions.json README.md CHANGELOG.md .github/upstream-state.json; then
+          if git diff --quiet -- Dockerfile gateway/go.mod gateway/go.sum CloudronManifest.json CloudronVersions.json README.md CHANGELOG.md .github/upstream-state.json; then
             echo "::error::Update script reported changed=true, but no release diff was produced."
             exit 1
           fi
 
           test -s "${{ steps.bump.outputs.release_notes_path }}"
-          git diff -- Dockerfile CloudronManifest.json CloudronVersions.json README.md CHANGELOG.md .github/upstream-state.json
+          git diff -- Dockerfile gateway/go.mod gateway/go.sum CloudronManifest.json CloudronVersions.json README.md CHANGELOG.md .github/upstream-state.json
 
       - name: Set up Node.js
-        if: steps.bump.outputs.changed == 'true'
         uses: actions/setup-node@v5
         with:
           node-version: "24"
 
       - name: Install Cloudron CLI
-        if: steps.bump.outputs.changed == 'true'
         run: npm install -g cloudron
 
       - name: Verify Cloudron versions catalog
-        if: steps.bump.outputs.changed == 'true'
         run: cloudron versions verify
 
       - name: Check manifest/catalog coherence
-        if: steps.bump.outputs.changed == 'true'
         run: |
           python3 - <<'PY'
           import json
@@ -88,15 +90,7 @@ jobs:
           print("Cloudron catalog coherence OK")
           PY
 
-      - name: Set up Go
-        if: steps.bump.outputs.changed == 'true'
-        uses: actions/setup-go@v6
-        with:
-          go-version: "stable"
-          cache: false
-
       - name: Lint GitHub Actions workflows
-        if: steps.bump.outputs.changed == 'true'
         run: go run github.com/rhysd/actionlint/cmd/actionlint@latest
 
       - name: Check publication state
@@ -172,17 +166,50 @@ jobs:
         run: git checkout --detach "${RELEASE_TAG}"
 
       - name: Set up Docker Buildx
-        if: steps.bump.outputs.changed == 'true' || steps.publication.outputs.needs_image == 'true'
+        if: steps.publication.outputs.needs_publish == 'true'
         uses: docker/setup-buildx-action@v4
 
-      - name: Build Docker image before committing
-        if: steps.bump.outputs.changed == 'true'
+      - name: Run regression tests
+        if: steps.publication.outputs.needs_publish == 'true'
+        run: |
+          python3 -m unittest discover -s tests -v
+          for script in web/*.js; do node --check "$script"; done
+          cd gateway
+          go test -race ./...
+
+      - name: Build candidate Docker image
+        if: steps.publication.outputs.needs_publish == 'true'
         uses: docker/build-push-action@v7
         with:
           context: .
           push: false
           load: true
           tags: headscale-cloudron-app:autopublish-check
+          pull: true
+
+      - name: Test packaged API and persistence
+        if: steps.publication.outputs.needs_publish == 'true'
+        run: python3 scripts/smoke_image.py --check-tsnet --image headscale-cloudron-app:autopublish-check
+
+      - name: Test desktop and mobile UI
+        if: steps.publication.outputs.needs_publish == 'true'
+        env:
+          HEADSCALE_QA_DIR: ${{ runner.temp }}/headscale-ui-qa
+        run: |
+          npm ci --prefix tests/browser
+          npx --prefix tests/browser playwright install --with-deps chromium
+          node tests/browser/smoke.cjs headscale-cloudron-app:autopublish-check
+
+
+      - name: Save UI screenshots
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: headscale-ui-screenshots
+          path: ${{ runner.temp }}/headscale-ui-qa/*.png
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Log in to GHCR
         if: steps.publication.outputs.needs_image == 'true'
@@ -191,6 +218,17 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push the tested image before updating the catalog
+        if: steps.publication.outputs.needs_image == 'true'
+        env:
+          RELEASE_TAG: ${{ steps.bump.outputs.tag }}
+        run: |
+          set -euo pipefail
+          docker tag headscale-cloudron-app:autopublish-check "${IMAGE_NAME}:${RELEASE_TAG}"
+          docker push "${IMAGE_NAME}:${RELEASE_TAG}"
+          docker tag headscale-cloudron-app:autopublish-check "${IMAGE_NAME}:latest"
+          docker push "${IMAGE_NAME}:latest"
 
       - name: Commit and tag automatic update
         if: steps.publication.outputs.needs_git == 'true'
@@ -204,7 +242,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           if [ "${CHANGED}" = "true" ]; then
-            git add Dockerfile CloudronManifest.json CloudronVersions.json README.md CHANGELOG.md .github/upstream-state.json
+            git add Dockerfile gateway/go.mod gateway/go.sum CloudronManifest.json CloudronVersions.json README.md CHANGELOG.md .github/upstream-state.json
             if git diff --cached --quiet; then
               echo "::error::No staged release changes to commit."
               exit 1
@@ -224,16 +262,6 @@ jobs:
           fi
 
           git push --atomic origin HEAD:main "refs/tags/${RELEASE_TAG}"
-
-      - name: Build and push GHCR image
-        if: steps.publication.outputs.needs_image == 'true'
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ env.IMAGE_NAME }}:${{ steps.bump.outputs.tag }}
-            ${{ env.IMAGE_NAME }}:latest
 
       - name: Create source tarball
         if: steps.publication.outputs.needs_release == 'true'
@@ -255,6 +283,9 @@ jobs:
             --exclude='./.workflow' \
             --exclude='dist' \
             --exclude='./dist' \
+            --exclude='node_modules' \
+            --exclude='*/node_modules' \
+            --exclude='__pycache__' \
             -czf "$RUNNER_TEMP/$artifact" .
 
           echo "artifact=$RUNNER_TEMP/$artifact" >> "$GITHUB_OUTPUT"

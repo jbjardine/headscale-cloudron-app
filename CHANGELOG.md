@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.29.4-2 - 2026-10-04
+
+- Show and copy complete enrollment keys once, including keys created in the upstream UI.
+- Correct Headscale 0.29 user-key filtering and expire keys by their IDs instead of reporting a no-op success.
+- Add responsive enrollment and gateway pages with clear expiry and registration options.
+- Add an optional official Tailscale-to-Headscale TCP gateway with selected nodes/ports, source restrictions, connection/bandwidth limits and persistent isolated identities.
+- Keep gateway keys private and the gateway disabled by default; remove the unused NET_ADMIN capability.
+- Test API contracts, local tsnet forwarding, browser flows and restart persistence before publishing an image or updating the Cloudron catalog.
+- Track stable Headscale, Headscale UI, Tailscale SDK and Alpine updates weekly, with SHA256/module checksum verification and downgrade protection.
+
 ## 0.29.4-1 - 2026-09-28
 
 - Bump upstream Headscale to 0.29.4.
