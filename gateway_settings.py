@@ -109,13 +109,16 @@ def private_write(path, value):
 
 
 class GatewayManager:
-    def __init__(self, api, origin, directory="/app/data/gateway", binary="/usr/local/bin/headscale-gateway"):
+    def __init__(self, api, origin, directory="/app/data/gateway", binary="/usr/local/bin/headscale-gateway",
+                 api_url="http://127.0.0.1:8081", api_key_file="/app/data/ui_apikey"):
         self.api, self.origin = api, origin
         self.directory, self.binary = Path(directory), binary
+        self.api_url, self.api_key_file = api_url.rstrip("/"), api_key_file
         self.lock = threading.RLock()
         self.process = None
         self.running_settings = None
         self.message = "Gateway disabled"
+        self.start_error = False
         self.retry_at = 0
         self.stop_event = threading.Event()
 
@@ -129,8 +132,8 @@ class GatewayManager:
     def public(self):
         with self.lock:
             settings = self.settings()
-            state = {"state": "disabled" if not settings["enabled"] else "connecting", "message": self.message}
-            if settings["enabled"] and self.process is not None:
+            state = {"state": "disabled" if not settings["enabled"] else "error" if self.start_error else "connecting", "message": self.message}
+            if settings["enabled"] and self.process is not None and not self.start_error:
                 try:
                     saved = json.loads((self.directory / "status.json").read_text())
                     # The Go binary writes only this status DTO, never keys or
@@ -165,6 +168,7 @@ class GatewayManager:
             self.stop_process()
             (self.directory / "status.json").unlink(missing_ok=True)
             self.message = "Connecting the gateway" if settings["enabled"] else "Gateway disabled"
+            self.start_error = False
             self.retry_at = 0
             return self.public()
 
@@ -198,6 +202,15 @@ class GatewayManager:
         private_write(key_path, key)
 
     def tick(self):
+        try:
+            self._tick()
+        except (OSError, ValueError, KeyError):
+            with self.lock:
+                self.start_error = True
+                self.message = "Gateway could not start; check its keys, user and connectivity"
+                self.retry_at = time.monotonic() + 30
+
+    def _tick(self):
         with self.lock:
             settings = self.settings()
             if not settings["enabled"]:
@@ -211,20 +224,17 @@ class GatewayManager:
             (self.directory / "status.json").unlink(missing_ok=True)
             # Keys are read from private files, never command-line arguments.
             self.process = subprocess.Popen([self.binary, "--config", str(self.directory / "settings.json"),
-                                             "--state-dir", str(self.directory), "--headscale-url", self.origin])
+                                             "--state-dir", str(self.directory), "--headscale-url", self.origin,
+                                             "--headscale-api-url", self.api_url, "--api-key-file", self.api_key_file])
             self.running_settings = settings
             self.message = "Connecting the gateway"
+            self.start_error = False
             self.retry_at = time.monotonic() + 150
 
     def start(self):
         def run():
             while not self.stop_event.is_set():
-                try:
-                    self.tick()
-                except (OSError, ValueError, KeyError):
-                    with self.lock:
-                        self.message = "Gateway could not start; check its keys, user and connectivity"
-                        self.retry_at = time.monotonic() + 30
+                self.tick()
                 self.stop_event.wait(2)
         threading.Thread(target=run, daemon=True, name="gateway-manager").start()
 

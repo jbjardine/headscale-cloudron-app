@@ -50,7 +50,7 @@
             "containerPort": 3478
           }
         },
-        "changelog": "- Fix one-time enrollment key display, user filtering and key expiration with Headscale 0.29.4. Add a default-off, restricted TCP gateway using the official Tailscale SDK. Gate weekly GHCR and Cloudron catalog updates on regression, browser and persistence tests. Refresh Go crypto dependencies and check reachable vulnerabilities before publishing.",
+        "changelog": "- Fix one-time enrollment key display, user filtering and key expiration with Headscale 0.29.4. Add a default-off, restricted TCP gateway using the official Tailscale SDK. Gate weekly GHCR and Cloudron catalog updates on regression, browser and persistence tests. Refresh Go crypto dependencies and check reachable vulnerabilities before publishing. Revalidate saved node identities before each connection; support IPv6 targets, unused default ports and startup error status.",
         "dockerImage": "ghcr.io/jbjardine/headscale-cloudron-app:v0.29.4-2"
       },
       "creationDate": "Sun, 04 Oct 2026 00:00:00 GMT",

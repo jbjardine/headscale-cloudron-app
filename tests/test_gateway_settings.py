@@ -103,6 +103,30 @@ class GatewaySettingsTests(unittest.TestCase):
         self.manager.prepare_enrollment(self.settings())
         self.assertEqual(len(self.calls), 1)
 
+    def test_enrollment_preparation_failure_reports_error_and_retry(self):
+        self.manager.save(self.settings(enabled=True, officialAuthKey="tskey-auth-dummy"))
+        with patch.object(self.manager, "prepare_enrollment", side_effect=OSError("local API unavailable")), \
+             patch("gateway_settings.subprocess.Popen") as process:
+            self.manager.tick()
+        self.assertEqual(self.manager.public()["status"]["state"], "error")
+        self.assertGreater(self.manager.retry_at, 0)
+        self.assertIsNone(self.manager.process)
+        process.assert_not_called()
+
+    def test_process_start_failure_reports_error_and_successful_retry_recovers(self):
+        self.manager.save(self.settings(enabled=True, officialAuthKey="tskey-auth-dummy"))
+        with patch("gateway_settings.subprocess.Popen", side_effect=OSError("cannot execute binary")):
+            self.manager.tick()
+        self.assertEqual(self.manager.public()["status"]["state"], "error")
+        child = Mock(); child.poll.return_value = None
+        self.manager.retry_at = 0
+        with patch("gateway_settings.subprocess.Popen", return_value=child) as process:
+            self.manager.tick()
+        self.assertEqual(self.manager.public()["status"]["state"], "connecting")
+        arguments = process.call_args[0][0]
+        self.assertIn("--api-key-file", arguments)
+        self.assertNotIn("tskey-auth-dummy", arguments)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -348,7 +348,7 @@ class HeadscaleUiProxyHandler(BaseHTTPRequestHandler):
 
 def main():
     server = ThreadingHTTPServer((LISTEN_HOST, LISTEN_PORT), HeadscaleUiProxyHandler)
-    server.gateway = GatewayManager(server_api, APP_ORIGIN)
+    server.gateway = GatewayManager(server_api, APP_ORIGIN, api_url=HEADSCALE_API_URL, api_key_file=API_KEY_FILE)
     server.gateway.start()
     print("Headscale UI API proxy listening on %s:%s" % (LISTEN_HOST, LISTEN_PORT))
     try:

@@ -68,6 +68,8 @@ For tagged cloud clients and a tagged gateway, merge an appropriate grant into y
 | Bandwidth | Shared across services and both directions; 0 is unlimited; at most a 16 KiB burst |
 | Idle timeout | Default 900 seconds, renewed by traffic in either direction |
 
+Saved node IDs and their addresses are checked against the local Headscale API before startup and every new forwarded connection. Deleting a machine or reassigning its VPN address does not silently redirect a service to a replacement machine; missing or unverifiable identities block the connection. Both IPv4 and IPv6 Headscale destinations are selectable.
+
 Original source addresses are checked at gateway entry. Destination machines see the Headscale gateway as the connection source. Application authentication and TLS remain the destination service's responsibility: use its normal credentials and hostname/certificate validation. TCP forwarding does not support UDP, broadcast discovery or direct access to every private IP.
 
 Keys and identity state live under `/app/data/gateway` with private permissions and are included in Cloudron backups. The browser receives only a saved-key indicator, never stored secrets. Disabling the gateway closes listeners and keeps its identities for reuse. A replacement auth key does not move an already registered official identity to a different account. To deliberately replace an identity, disable the gateway, remove the corresponding machine from the coordination server and remove only its matching state directory/key through Cloudron's app terminal before reenrolling. Keep backups before such manual identity resets.

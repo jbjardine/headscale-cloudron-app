@@ -19,14 +19,20 @@
     var caption = ui.element("label", "", label);caption.appendChild(field);wrap.appendChild(caption);
     return { wrap: wrap, field: field };
   }
+  function unusedListenPort() {
+    var used = new Set(Array.from(document.querySelectorAll(".rule-listen-port")).map(function (field) { return Number(field.value); }));
+    for (var port = 1445; port <= 65535; port++) if (!used.has(port)) return port;
+    for (var lower = 1024; lower < 1445; lower++) if (!used.has(lower)) return lower;
+    return null;
+  }
   function addRule(rule) {
     if (!nodes.length) { message("Register a Headscale machine before adding a service.", true);return; }
     var row = ui.element("div", "pkg-rule"), grid = ui.element("div", "pkg-inline-fields");
     var machineLabel = ui.element("label", "", "Headscale machine"), machine = ui.element("select");machine.className = "rule-node";
-    nodes.forEach(function (node) { (node.ipAddresses || []).filter(function (ip) { return !ip.includes(":"); }).forEach(function (ip) {
+    nodes.forEach(function (node) { (node.ipAddresses || []).forEach(function (ip) {
       var option = new Option((node.givenName || node.name || "Machine " + node.id) + " · " + ip, node.id + "|" + ip);machine.appendChild(option);
     }); });
-    if (!machine.options.length) { message("No machine has a Headscale IPv4 address.", true);return; }
+    if (!machine.options.length) { message("No machine has a Headscale VPN address.", true);return; }
     if (rule) {
       var wanted = rule.nodeId + "|" + rule.targetIp;
       if (!Array.from(machine.options).some(function (item) { return item.value === wanted; })) machine.appendChild(new Option("Unavailable machine · " + rule.targetIp, wanted));
@@ -34,7 +40,9 @@
     }
     machineLabel.appendChild(machine);grid.appendChild(machineLabel);
     var destination = input("Destination TCP port", "number", rule ? rule.targetPort : 445, 1, 65535);destination.field.className = "rule-target-port";grid.appendChild(destination.wrap);
-    var port = input("Gateway TCP port", "number", rule ? rule.listenPort : 1445 + document.querySelectorAll(".pkg-rule").length, 1024, 65535);port.field.className = "rule-listen-port";grid.appendChild(port.wrap);
+    var listenPort = rule ? rule.listenPort : unusedListenPort();
+    if (listenPort === null) { message("No unused gateway port is available.", true);return; }
+    var port = input("Gateway TCP port", "number", listenPort, 1024, 65535);port.field.className = "rule-listen-port";grid.appendChild(port.wrap);
     row.appendChild(grid);
     var actions = ui.element("div", "pkg-actions"), remove = ui.element("button", "pkg-button", "Remove service");remove.type = "button";remove.addEventListener("click", function () { row.remove(); });actions.appendChild(remove);row.appendChild(actions);$("rules").appendChild(row);
   }

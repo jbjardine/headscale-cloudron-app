@@ -97,8 +97,9 @@ func loadConfig(path string) (config, error) {
 	}
 	ports := map[int]bool{}
 	for _, r := range c.Rules {
+		nodeID, idErr := strconv.ParseUint(r.NodeID, 10, 64)
 		ip, err := netip.ParseAddr(r.TargetIP)
-		if err != nil || !tailnetIP(ip) || r.TargetPort < 1 || r.TargetPort > 65535 || r.ListenPort < 1024 || r.ListenPort > 65535 || ports[r.ListenPort] {
+		if idErr != nil || nodeID == 0 || err != nil || !tailnetIP(ip) || r.TargetPort < 1 || r.TargetPort > 65535 || r.ListenPort < 1024 || r.ListenPort > 65535 || ports[r.ListenPort] {
 			return c, errors.New("invalid forwarding rule")
 		}
 		ports[r.ListenPort] = true
@@ -128,6 +129,7 @@ func allowed(remote net.Addr, mode string, prefixes []netip.Prefix) bool {
 
 type forwarder struct {
 	dial    func(context.Context, string, string) (net.Conn, error)
+	verify  func(context.Context, string) error
 	sources []netip.Prefix
 	mode    string
 	slots   chan struct{}
@@ -157,6 +159,11 @@ func (f *forwarder) serve(ctx context.Context, listener net.Listener, target str
 				defer func() { <-f.slots; f.stats.active.Add(-1) }()
 				defer incoming.Close()
 				dialCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+				if f.verify != nil && f.verify(dialCtx, target) != nil {
+					cancel()
+					f.stats.denied.Add(1)
+					return
+				}
 				outgoing, err := f.dial(dialCtx, "tcp", target)
 				cancel()
 				if err != nil {
@@ -223,7 +230,7 @@ func (f *forwarder) bridge(ctx context.Context, a, b net.Conn) {
 	<-done
 }
 
-func run(ctx context.Context, configPath, dir, controlURL string) error {
+func run(ctx context.Context, configPath, dir, controlURL, apiURL, apiKeyFile string) error {
 	c, err := loadConfig(configPath)
 	if err != nil {
 		return errors.New("invalid gateway settings")
@@ -231,6 +238,17 @@ func run(ctx context.Context, configPath, dir, controlURL string) error {
 	s := status{State: "connecting", Message: "Connecting the two gateway identities"}
 	statusPath := filepath.Join(dir, "status.json")
 	privateJSON(statusPath, s)
+	verifyNode, err := newNodeVerifier(apiURL, apiKeyFile)
+	if err != nil {
+		return err
+	}
+	targets := map[string]rule{}
+	for _, r := range c.Rules {
+		if err := verifyNode(ctx, r); err != nil {
+			return errors.New("A selected Headscale machine changed or is unavailable; refresh gateway services")
+		}
+		targets[net.JoinHostPort(r.TargetIP, strconv.Itoa(r.TargetPort))] = r
+	}
 	headDir := filepath.Join(dir, "headscale-"+c.HeadscaleUserID)
 	for _, path := range []string{filepath.Join(dir, "official"), headDir} {
 		if err := os.MkdirAll(path, 0700); err != nil {
@@ -264,6 +282,13 @@ func run(ctx context.Context, configPath, dir, controlURL string) error {
 		s.OfficialIPs = append(s.OfficialIPs, ip.String())
 	}
 	f := &forwarder{dial: headscale.Dial, mode: c.SourceMode, slots: make(chan struct{}, c.MaxConnections), idle: time.Duration(c.IdleTimeoutSeconds) * time.Second, stats: &counters{}}
+	f.verify = func(ctx context.Context, target string) error {
+		r, exists := targets[target]
+		if !exists {
+			return errors.New("unconfigured destination")
+		}
+		return verifyNode(ctx, r)
+	}
 	for _, p := range c.AllowedSources {
 		prefix, _ := netip.ParsePrefix(p)
 		f.sources = append(f.sources, prefix)
@@ -276,6 +301,9 @@ func run(ctx context.Context, configPath, dir, controlURL string) error {
 			if ip.String() == r.TargetIP {
 				return errors.New("The gateway cannot forward to itself")
 			}
+		}
+		if err := verifyNode(ctx, r); err != nil {
+			return errors.New("A selected Headscale machine changed or is unavailable; refresh gateway services")
 		}
 		listener, err := official.Listen("tcp", ":"+strconv.Itoa(r.ListenPort))
 		if err != nil {
@@ -304,10 +332,12 @@ func main() {
 	configPath := flag.String("config", "/app/data/gateway/settings.json", "Settings file")
 	dir := flag.String("state-dir", "/app/data/gateway", "Private state directory")
 	control := flag.String("headscale-url", "", "Headscale coordination URL")
+	apiURL := flag.String("headscale-api-url", "http://127.0.0.1:8081", "Local Headscale API URL")
+	apiKeyFile := flag.String("api-key-file", "/app/data/ui_apikey", "Private local API key file")
 	flag.Parse()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := run(ctx, *configPath, *dir, *control); err != nil {
+	if err := run(ctx, *configPath, *dir, *control, *apiURL, *apiKeyFile); err != nil {
 		privateJSON(filepath.Join(*dir, "status.json"), status{State: "error", Message: err.Error()})
 		fmt.Fprintln(os.Stderr, "Gateway stopped; inspect its status in the authenticated UI")
 		os.Exit(1)

@@ -96,6 +96,24 @@ const {chromium} = require('playwright');
     await page.getByLabel('Headscale user for this gateway').selectOption(String(created.user.id));
     await page.getByRole('button', {name: 'Save gateway settings', exact: true}).click();
     await page.getByText('Add an official Tailscale auth key before enabling the gateway', {exact: true}).waitFor();
+    // Rendering fixture: no VPN client is enrolled and the gateway stays off.
+    await context.route('**/web/api/v1/node', async route => {
+      await route.fulfill({json: {nodes: [{id: '123', name: 'ipv6-only-fixture', ipAddresses: ['fd7a:115c:a1e0::7']}]}});
+    });
+    await page.reload();
+    await page.waitForFunction(() => !document.getElementById('save').disabled);
+    await page.getByRole('button', {name: 'Add a TCP service', exact: true}).click();
+    assert.equal(await page.locator('.rule-node').first().inputValue(), '123|fd7a:115c:a1e0::7', 'IPv6-only machine missing from selector');
+    await page.getByRole('button', {name: 'Add a TCP service', exact: true}).click();
+    assert.deepEqual(await page.locator('.rule-listen-port').evaluateAll(fields => fields.map(field => Number(field.value))), [1445, 1446]);
+    await page.getByRole('button', {name: 'Remove service', exact: true}).first().click();
+    await page.getByRole('button', {name: 'Add a TCP service', exact: true}).click();
+    assert.deepEqual(await page.locator('.rule-listen-port').evaluateAll(fields => fields.map(field => Number(field.value))), [1446, 1445], 'A removed rule made a duplicate default port');
+    await page.getByRole('button', {name: 'Save gateway settings', exact: true}).click();
+    await page.getByText('Gateway disabled. No services are forwarded.', {exact: true}).waitFor();
+    const savedGateway = await (await request.get(base + '/web/api/v1/package/gateway')).json();
+    assert(savedGateway.settings.rules.every(rule => rule.targetIp === 'fd7a:115c:a1e0::7'));
+    assert.equal(savedGateway.settings.enabled, false);
     // Responsive layout and navigation must remain usable at phone width.
     await page.setViewportSize({width: 390, height: 844});
     await page.goto(base + '/web/keys.html');
@@ -108,7 +126,7 @@ const {chromium} = require('playwright');
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Gateway page overflows on mobile');
     await capture('06-gateway-mobile');
     assert.deepEqual(failures, [], 'Browser JavaScript errors');
-    console.log('Browser smoke passed: create user, create/copy/reveal/clear/expire key, upstream key dialog, gateway save/errors, desktop/mobile layouts; no production VPN enrollment');
+    console.log('Browser smoke passed: create user, create/copy/reveal/clear/expire key, upstream key dialog, gateway save/errors, IPv6-only destination, unused default ports, desktop/mobile layouts; no production VPN enrollment');
   } finally {
     if (browser) await browser.close();
     if (container) {
