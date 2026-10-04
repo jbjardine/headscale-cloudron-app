@@ -89,7 +89,9 @@ The current package tracks:
 - Tailscale gateway SDK `1.102.5`
 - Alpine `3.24`
 
-Automatic checks publish package releases; Cloudron's own update/backup settings control installation on a running server. `GITHUB_TOKEN` needs repository contents and package write permissions for publication. Branch protection must allow the existing automation to publish to `main`, or publication will stop at the Git push.
+Validation and upstream dependency updates run in separate jobs with read permissions and no persisted checkout credentials. The publishing jobs receive the tested image and release data through artifacts; only those jobs have write permissions, and they handle the candidate as data without running its code. Catalog updates copy only the allowed release files into a checkout of the workflow's trusted base commit. Manual GHCR publishing uses the same separation.
+
+Automatic checks publish package releases; Cloudron's own update/backup settings control installation on a running server. Only the publication jobs receive `GITHUB_TOKEN` repository contents or package write permissions. Branch protection must allow the existing automation to publish to `main`, or publication will stop at the Git push.
 
 ## Build and test
 
