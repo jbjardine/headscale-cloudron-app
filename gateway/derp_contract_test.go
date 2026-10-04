@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -35,6 +36,10 @@ func TestPackagedEmbeddedDERP(t *testing.T) {
 	t.Setenv("TS_DISABLE_LOGTAIL", "true")
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
+	publicSTUNPort, err := strconv.Atoi(os.Getenv("HEADSCALE_TEST_STUN_PORT"))
+	if err != nil || publicSTUNPort < 1 || publicSTUNPort > 65535 {
+		t.Fatal("a public fixture STUN port is required")
+	}
 	enroll := func(index int) key.NodePrivate {
 		payload, _ := json.Marshal(map[string]any{"user": os.Getenv("HEADSCALE_TEST_USER"), "expiration": time.Now().Add(time.Hour).UTC().Format(time.RFC3339), "ephemeral": false})
 		req, _ := http.NewRequestWithContext(ctx, "POST", base+"/web/api/v1/preauthkey", bytes.NewReader(payload))
@@ -60,6 +65,18 @@ func TestPackagedEmbeddedDERP(t *testing.T) {
 		state, err := server.Up(ctx)
 		if err != nil {
 			t.Fatal("DERP fixture node enrollment failed")
+		}
+		local, err := server.LocalClient()
+		if err != nil {
+			t.Fatal(err)
+		}
+		derpMap, err := local.CurrentDERPMap(ctx)
+		if err != nil || derpMap == nil {
+			t.Fatal("fixture did not receive its DERP map")
+		}
+		region := derpMap.Regions[999]
+		if region == nil || len(region.Nodes) != 1 || region.Nodes[0].STUNPort != publicSTUNPort || region.Nodes[0].HostName != u.Hostname() {
+			t.Fatal("client received an incorrect embedded DERP region or public STUN port")
 		}
 		encoded, err := os.ReadFile(filepath.Join(directory, "tailscaled.state"))
 		if err != nil {

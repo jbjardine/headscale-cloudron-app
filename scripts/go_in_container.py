@@ -40,7 +40,7 @@ def main():
                        "-w", "/src/" + cwd.as_posix(), "-e", "GOCACHE=/go/build-cache", "-e", "GOFLAGS=-p=4", "-e", "TS_DISABLE_LOGTAIL=true"]
     # Only public network settings and local fixture coordinates cross this
     # boundary. GitHub/Cloudron keys, runner tokens and Docker socket do not.
-    for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy", "HEADSCALE_TEST_URL", "HEADSCALE_TEST_USER", "HEADSCALE_TEST_DERP"):
+    for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy", "HEADSCALE_TEST_URL", "HEADSCALE_TEST_USER", "HEADSCALE_TEST_DERP", "HEADSCALE_TEST_STUN_PORT"):
         if os.environ.get(name):
             command += ["-e", name + "=" + os.environ[name]]
     if os.environ.get("CODEX_PROXY_CERT"):

@@ -143,7 +143,7 @@ def main():
                 mapped = json.loads(command("exec", name, "python3", "-c", "import json,yaml; print(json.dumps(yaml.safe_load(open('/run/headscale/cloudron-derp.yaml'))))"))
                 assert mapped["regions"]["999"]["nodes"][0]["stunport"] == stun_port, "Wrong public STUN port advertised"
                 derp_key = command("exec", name, "sha256sum", "/app/data/derp_server_private.key")
-                sdk_environment = {**os.environ, "HEADSCALE_TEST_URL": base, "HEADSCALE_TEST_USER": str(first), "HEADSCALE_TEST_DERP": "1"}
+                sdk_environment = {**os.environ, "HEADSCALE_TEST_URL": base, "HEADSCALE_TEST_USER": str(first), "HEADSCALE_TEST_DERP": "1", "HEADSCALE_TEST_STUN_PORT": str(stun_port)}
                 def check_relay():
                     subprocess.run([args.go_binary, "test", "-v", "-run", "^TestPackagedEmbeddedDERP$", "-count=1", "-timeout=60s", "."],
                                    cwd=Path(__file__).resolve().parents[1] / "gateway", env=sdk_environment, check=True, timeout=300)
