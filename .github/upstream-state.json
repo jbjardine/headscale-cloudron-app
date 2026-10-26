@@ -1,10 +1,10 @@
 {
-  "headscale_version": "0.29.4",
-  "headscale_sha256": "212ed0a884c0d3541e094c4bebbe94397df6f4e01bd3d7f059c520cb55e0d757",
+  "headscale_version": "0.29.6",
+  "headscale_sha256": "7477c374949eea6fb7cf3cbff14dbef49e4d118d9a33557d6764a77ece617e53",
   "headscale_ui_version": "2026.03.17",
   "headscale_ui_sha256": "e959dde83569233a8643917e5c58f596b433709556b86f9e998c729d01a6cb29",
-  "tailscale_version": "1.102.5",
+  "tailscale_version": "1.104.2",
   "alpine_tag": "3.24",
-  "alpine_digest": "sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6",
-  "updated_at": "2026-10-04T15:25:03.663736+00:00"
+  "alpine_digest": "sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a",
+  "updated_at": "2026-10-26T08:49:48.050456+00:00"
 }

@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM golang:1.26.6-alpine AS gateway-build
+FROM golang:1.27.3-alpine AS gateway-build
 WORKDIR /src
 COPY gateway/go.mod gateway/go.sum ./
 RUN --mount=type=secret,id=proxy_ca --mount=type=cache,target=/go/pkg/mod \
@@ -11,8 +11,8 @@ RUN --mount=type=bind,source=gateway,target=/src,readonly --mount=type=secret,id
 
 FROM alpine:3.24
 
-ENV HEADSCALE_VERSION=0.29.4 \
-    HEADSCALE_SHA256=212ed0a884c0d3541e094c4bebbe94397df6f4e01bd3d7f059c520cb55e0d757 \
+ENV HEADSCALE_VERSION=0.29.6 \
+    HEADSCALE_SHA256=7477c374949eea6fb7cf3cbff14dbef49e4d118d9a33557d6764a77ece617e53 \
     HEADSCALE_UI_VERSION=2026.03.17 \
     HEADSCALE_UI_SHA256=e959dde83569233a8643917e5c58f596b433709556b86f9e998c729d01a6cb29
 

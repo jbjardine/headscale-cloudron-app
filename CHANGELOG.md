@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.29.6-1 - 2026-10-26
+
+- Update the official Tailscale gateway SDK to 1.104.2. Bump upstream Headscale to 0.29.6. Rebuild for updated alpine:3.24 digest.
+
 ## 0.29.4-3 - 2026-10-04
 
 - Use one responsive navigation and theme across Users, Devices, Enrollment keys, Tailscale gateway and Settings.

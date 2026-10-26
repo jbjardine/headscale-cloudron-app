@@ -15,7 +15,7 @@ https://raw.githubusercontent.com/jbjardine/headscale-cloudron-app/main/Cloudron
 Install **Headscale**, then open **Configure**. The prepared `0.29.4-3` catalog entry stays in `testing` until the publication workflow has tested and pushed its image. Run that workflow manually after merging, or wait for its weekly run. Once published, advanced direct installation from the package directory is:
 
 ```sh
-cloudron install --location headscale --image ghcr.io/jbjardine/headscale-cloudron-app:v0.29.4-3
+cloudron install --location headscale --image ghcr.io/jbjardine/headscale-cloudron-app:v0.29.6-1
 ```
 
 ## Administration UI
@@ -98,9 +98,9 @@ Before publishing, it runs API/security regression tests, local tsnet forwarding
 
 The current package tracks:
 
-- Headscale `0.29.4`
+- Headscale `0.29.6`
 - Headscale UI `2026.03.17`
-- Tailscale gateway SDK `1.102.5`
+- Tailscale gateway SDK `1.104.2`
 - Alpine `3.24`
 
 The preparation job freezes tracked source files and generated release notes before any updated dependency code runs. A separate build job exports the image before running it. Validation and publication each download those original artifacts by immutable IDs and verify their SHA256 digests and Docker image identity. Go SDK tests run inside a container with read-only sources, isolated caches and no host credentials or Docker socket. All preparation/build/test jobs have read permissions and no persisted checkout credentials. Only the publishing job has write permissions; it uses a helper from the reviewed base commit to handle release inputs as data and copy the allowed release files. The public source archive also comes from the original snapshot. Automatic publication stops before pushing an image if `main` has advanced during validation. Manual GHCR publishing uses the same build, validation and artifact checks.
